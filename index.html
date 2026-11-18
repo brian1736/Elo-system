@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Fight the Landlord Elo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%83%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;700&display=swap">
 <style>
@@ -81,6 +82,7 @@ textarea{min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace}
   <header>
     <h1>Fight the Landlord ratings</h1>
     <p>An Elo rating for the three-player card game. One landlord plays against two peasants; every game moves each player’s rating.</p>
+    <p class="hint" id="status" role="status"></p>
   </header>
 
   <div class="grid">
@@ -95,8 +97,6 @@ textarea{min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace}
           <input type="radio" name="w" id="wl" value="1" checked><label class="l" for="wl">Landlord won</label>
           <input type="radio" name="w" id="wp" value="0"><label class="p" for="wp">Peasants won</label>
         </div>
-        <label for="mult">Final score multiplier</label>
-        <select id="mult"></select>
         <div class="preview" id="preview" aria-live="polite"></div>
         <button class="primary" id="record">Record game</button>
       </div>
@@ -117,50 +117,46 @@ textarea{min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace}
     <ul class="hist" id="hist"></ul>
     <button class="link" id="undo">Undo last game</button>
   </section>
-
-  <details class="full">
-    <summary>Rating settings</summary>
-    <div class="cfg" id="cfg"></div>
-    <p class="hint" id="calib"></p>
-  </details>
-
-  <details class="full">
-    <summary>Backup</summary>
-    <p class="hint">Ratings are saved in this browser only. Copy the backup text to keep it somewhere safe, or paste a saved backup and restore it.</p>
-    <textarea id="backup" aria-label="Backup data"></textarea>
-    <div class="row" style="margin-top:8px">
-      <button id="copyB">Copy backup</button>
-      <button id="restoreB">Restore from text</button>
-      <button id="resetB">Delete all data</button>
-    </div>
-    <p class="hint" id="bmsg"></p>
-  </details>
 </div>
 
-<script>
-(function(){
-var KEY="landlord-elo-v1";
-var DEF={start:1500,scale:400,offset:0,kNew:40,kMid:24,kEst:16,prov:20,est:100,mw:0.25,maxm:1.5};
-var LABELS={start:"Starting rating",scale:"Scale",offset:"Landlord offset",kNew:"K, new players",kMid:"K, mid",kEst:"K, established",prov:"Provisional games",est:"Established games",mw:"Margin weight",maxm:"Max margin"};
-var S=load();
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-function load(){
-  try{var raw=localStorage.getItem(KEY);if(raw){var d=JSON.parse(raw);d.cfg=Object.assign({},DEF,d.cfg||{});return d;}}catch(e){}
-  return {players:[],games:[],cfg:Object.assign({},DEF)};
-}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+/* ====== PASTE YOUR FIREBASE DETAILS HERE (see setup steps) ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyB_Run2TYJi55vID0qQdZKfcDJZhXiDcj4",
+  authDomain: "elo-system-b34ae.firebaseapp.com",
+  projectId: "elo-system-b34ae",
+  storageBucket: "elo-system-b34ae.firebasestorage.app",
+  messagingSenderId: "166705652920",
+  appId: "1:166705652920:web:c883f4f652be10d71c004d"
+};
+/* ================================================================ */
+
+const DEF={start:500,scale:400,offset:0,kNew:40,kMid:24,kEst:16,prov:20,est:100};
+const configured=!firebaseConfig.apiKey.startsWith("PASTE");
+let db=null;
+const S={players:[],ids:{},games:[],cfg:Object.assign({},DEF)};
+let T={};
+
+function $(id){return document.getElementById(id);}
+function el(tag,txt,cls){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e;}
+function sign(x){return(x>=0?"+":"\u2212")+Math.abs(x).toFixed(1);}
+function pct(x){return Math.round(x*100)+"%";}
+function setStatus(t,bad){var s=$("status");s.textContent=t;s.style.color=bad?"var(--land)":"var(--muted)";}
 
 function kf(p,c){return p.g<c.prov?c.kNew:(p.g<c.est?c.kMid:c.kEst);}
-function margin(m,c){return(c.mw<=0||m<=1)?1:Math.min(c.maxm,1+c.mw*Math.log2(m));}
 function expected(rl,ra,rb,c){return 1/(1+Math.pow(10,((ra+rb)/2-(rl+c.offset))/c.scale));}
 function calc(T,g,c){
-  var L=T[g.l],A=T[g.a],B=T[g.b],e=expected(L.r,A.r,B.r,c),s=g.w?1:0,m=margin(g.m,c);
-  return {e:e,dl:kf(L,c)*m*(s-e),da:kf(A,c)*m*0.5*(e-s),db:kf(B,c)*m*0.5*(e-s)};
+  var L=T[g.l],A=T[g.a],B=T[g.b],e=expected(L.r,A.r,B.r,c),s=g.w?1:0;
+  return {e:e,dl:kf(L,c)*(s-e),da:kf(A,c)*0.5*(e-s),db:kf(B,c)*0.5*(e-s)};
 }
 function replay(){
   var T={},c=S.cfg;
   S.players.forEach(function(n){T[n]={r:c.start,g:0,lg:0,lw:0,pg:0,pw:0};});
   S.games.forEach(function(g){
+    g.res=null;
     if(!(T[g.l]&&T[g.a]&&T[g.b]))return;
     var x=calc(T,g,c);g.res=x;
     T[g.l].r+=x.dl;T[g.a].r+=x.da;T[g.b].r+=x.db;
@@ -169,12 +165,6 @@ function replay(){
   });
   return T;
 }
-var T=replay();
-
-function $(id){return document.getElementById(id);}
-function el(tag,txt,cls){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e;}
-function sign(x){return(x>=0?"+":"\u2212")+Math.abs(x).toFixed(1);}
-function pct(x){return Math.round(x*100)+"%";}
 
 function fillSelects(){
   ["selL","selA","selB"].forEach(function(id,i){
@@ -182,27 +172,22 @@ function fillSelects(){
     S.players.forEach(function(n){var o=el("option",n);o.value=n;s.appendChild(o);});
     if(cur&&S.players.indexOf(cur)>=0)s.value=cur;else if(S.players[i])s.value=S.players[i];
   });
-  var m=$("mult");if(!m.options.length){[1,2,4,8,16,32,64].forEach(function(v){var o=el("option","\u00d7"+v);o.value=v;m.appendChild(o);});}
 }
-
 function renderPreview(){
   var p=$("preview"),btn=$("record");p.innerHTML="";
+  if(!db){btn.disabled=true;p.textContent="Connect the database to record games.";return;}
   if(S.players.length<3){btn.disabled=true;p.textContent="Add at least three players to record a game.";return;}
   var l=$("selL").value,a=$("selA").value,b=$("selB").value;
   if(l===a||l===b||a===b){btn.disabled=true;p.textContent="Pick three different players.";return;}
   btn.disabled=false;
-  var won=$("wl").checked,g={l:l,a:a,b:b,w:won,m:+$("mult").value},x=calc(T,g,S.cfg);
+  var g={l:l,a:a,b:b,w:$("wl").checked},x=calc(T,g,S.cfg);
   p.appendChild(el("div",l+" is expected to win "+pct(x.e)+" of the time."));
   var bar=el("div",null,"bar"),i=el("i");i.style.width=(x.e*100)+"%";bar.appendChild(i);p.appendChild(bar);
   p.appendChild(el("div","If recorded: "+l+" "+sign(x.dl)+", "+a+" "+sign(x.da)+", "+b+" "+sign(x.db)));
 }
-
 function renderBoard(){
   var b=$("board");b.innerHTML="";
-  if(!S.players.length){
-    var d=el("div",null,"empty");d.appendChild(el("p","No players yet. Add the names of everyone at your table."));
-    var s=el("button","Load sample players");s.onclick=sample;d.appendChild(s);b.appendChild(d);return;
-  }
+  if(!S.players.length){b.appendChild(el("p","No players yet. Add the names of everyone who plays.","empty"));return;}
   var rows=S.players.slice().sort(function(x,y){return T[y].r-T[x].r;});
   var t=el("table"),h=el("tr");
   ["#","Player","Rating","Games","As landlord","As peasant",""].forEach(function(x,i){var th=el("th",x);if(i==2||i==3)th.className="num";h.appendChild(th);});
@@ -214,88 +199,62 @@ function renderBoard(){
     r.appendChild(el("td",p.lg?p.lw+"\u2013"+(p.lg-p.lw)+" ("+pct(p.lw/p.lg)+")":"\u2013"));
     r.appendChild(el("td",p.pg?p.pw+"\u2013"+(p.pg-p.pw)+" ("+pct(p.pw/p.pg)+")":"\u2013"));
     var td=el("td");
-    if(!p.g){var x=el("button","\u00d7","x");x.title="Remove "+n;x.setAttribute("aria-label","Remove "+n);x.onclick=function(){S.players=S.players.filter(function(q){return q!==n;});commit();};td.appendChild(x);}
+    if(!p.g&&db){var x=el("button","\u00d7","x");x.title="Remove "+n;x.setAttribute("aria-label","Remove "+n);x.onclick=function(){deleteDoc(doc(db,"players",S.ids[n])).catch(fail);};td.appendChild(x);}
     r.appendChild(td);t.appendChild(r);
   });
   b.appendChild(t);
 }
-
 function renderHist(){
   var u=$("hist");u.innerHTML="";
   var gs=S.games.slice(-15).reverse();
-  $("undo").style.display=gs.length?"":"none";
+  $("undo").style.display=(gs.length&&db)?"":"none";
   if(!gs.length){u.appendChild(el("li","No games recorded yet.","empty"));return;}
   gs.forEach(function(g){
     var li=el("li"),r=g.res;
     li.appendChild(el("span",g.w?"Landlord won":"Peasants won","tag "+(g.w?"l":"p")));
-    li.appendChild(document.createTextNode(" "+g.l+" (landlord) vs "+g.a+" and "+g.b+", \u00d7"+g.m+". "));
-    if(r){
-      var s=el("span",sign(r.dl)+" / "+sign(r.da)+" / "+sign(r.db));
-      li.appendChild(s);
-    }
+    li.appendChild(document.createTextNode(" "+g.l+" (landlord) vs "+g.a+" and "+g.b+". "));
+    if(r)li.appendChild(el("span",sign(r.dl)+" / "+sign(r.da)+" / "+sign(r.db)));
     u.appendChild(li);
   });
 }
-
-function renderCfg(){
-  var c=$("cfg");c.innerHTML="";
-  Object.keys(DEF).forEach(function(k){
-    var w=el("div"),lab=el("label",LABELS[k]);lab.htmlFor="c_"+k;
-    var i=el("input");i.type="number";i.id="c_"+k;i.value=S.cfg[k];i.step="any";
-    i.onchange=function(){var v=parseFloat(i.value);if(isNaN(v)){i.value=S.cfg[k];return;}S.cfg[k]=v;commit();};
-    w.appendChild(lab);w.appendChild(i);c.appendChild(w);
-  });
-  var n=S.games.length,calib=$("calib");calib.innerHTML="";
-  if(!n){calib.textContent="Landlord offset above 0 favours the landlord role. Once you have a few hundred games, a suggested value will appear here.";return;}
-  var w=S.games.filter(function(g){return g.w;}).length,p=Math.min(Math.max(w/n,0.01),0.99);
-  var off=S.cfg.scale*Math.log10(p/(1-p));
-  calib.appendChild(document.createTextNode("Landlords won "+pct(w/n)+" of "+n+" games. Suggested landlord offset: "+off.toFixed(1)+" (a rough guide for evenly matched tables). "));
-  var b=el("button","Apply","link");b.onclick=function(){S.cfg.offset=Math.round(off*10)/10;commit();};calib.appendChild(b);
-}
-
-function commit(){T=replay();save();renderAll();}
-function renderAll(){fillSelects();renderBoard();renderHist();renderCfg();renderPreview();}
-
-function sample(){
-  S.players=["Ava","Ben","Cleo","Dan","Eli"];S.games=[];commit();
-}
+function refresh(){T=replay();fillSelects();renderBoard();renderHist();renderPreview();}
+function fail(e){setStatus("Couldn\u2019t save: "+e.message,true);}
 
 $("addForm").onsubmit=function(e){
   e.preventDefault();
   var n=$("newName").value.trim();
-  if(!n)return;
+  if(!n||!db)return;
+  var id=n.toLowerCase().replace(/[\/\s]+/g,"_");
   if(S.players.some(function(p){return p.toLowerCase()===n.toLowerCase();})){$("newName").value="";return;}
-  S.players.push(n);$("newName").value="";commit();
+  setDoc(doc(db,"players",id),{name:n,t:serverTimestamp()}).catch(fail);
+  $("newName").value="";
 };
 $("record").onclick=function(){
-  S.games.push({l:$("selL").value,a:$("selA").value,b:$("selB").value,w:$("wl").checked,m:+$("mult").value});
-  $("mult").value=1;commit();
+  if(!db)return;
+  addDoc(collection(db,"games"),{l:$("selL").value,a:$("selA").value,b:$("selB").value,w:$("wl").checked,t:serverTimestamp()}).catch(fail);
 };
-$("undo").onclick=function(){S.games.pop();commit();};
-["selL","selA","selB","mult","wl","wp"].forEach(function(id){$(id).addEventListener("change",renderPreview);});
+$("undo").onclick=function(){
+  var g=S.games[S.games.length-1];
+  if(g&&db)deleteDoc(doc(db,"games",g.id)).catch(fail);
+};
+["selL","selA","selB","wl","wp"].forEach(function(id){$(id).addEventListener("change",renderPreview);});
 
-var bmsg=$("bmsg");
-$("copyB").onclick=function(){
-  var txt=JSON.stringify({players:S.players,games:S.games.map(function(g){return{l:g.l,a:g.a,b:g.b,w:g.w,m:g.m};}),cfg:S.cfg});
-  $("backup").value=txt;$("backup").select();
-  try{navigator.clipboard.writeText(txt).then(function(){bmsg.textContent="Backup copied.";},function(){bmsg.textContent="Copy the selected text manually.";});}
-  catch(e){bmsg.textContent="Copy the selected text manually.";}
-};
-$("restoreB").onclick=function(){
-  try{
-    var d=JSON.parse($("backup").value);
-    if(!Array.isArray(d.players)||!Array.isArray(d.games))throw 0;
-    S={players:d.players,games:d.games,cfg:Object.assign({},DEF,d.cfg||{})};
-    commit();bmsg.textContent="Backup restored.";
-  }catch(e){bmsg.textContent="That text isn\u2019t a valid backup. Use the text from \u201cCopy backup\u201d.";}
-};
-$("resetB").onclick=function(){
-  if(!confirm("Delete all players, games and settings from this browser?"))return;
-  S={players:[],games:[],cfg:Object.assign({},DEF)};commit();bmsg.textContent="All data deleted.";
-};
-
-renderAll();
-})();
+if(configured){
+  db=getFirestore(initializeApp(firebaseConfig));
+  setStatus("Connecting\u2026");
+  onSnapshot(query(collection(db,"players"),orderBy("t")),function(snap){
+    S.players=[];S.ids={};
+    snap.forEach(function(d){var n=d.data().name;S.players.push(n);S.ids[n]=d.id;});
+    refresh();setStatus("Live: everyone sees the same leaderboard.");
+  },function(e){setStatus("Couldn\u2019t load players: "+e.message,true);});
+  onSnapshot(query(collection(db,"games"),orderBy("t")),function(snap){
+    S.games=snap.docs.map(function(d){var x=d.data();return{id:d.id,l:x.l,a:x.a,b:x.b,w:x.w};});
+    refresh();
+  },function(e){setStatus("Couldn\u2019t load games: "+e.message,true);});
+}else{
+  setStatus("The database isn\u2019t connected yet. Follow the setup steps, then paste your Firebase details at the top of the script in this file.",true);
+}
+refresh();
 </script>
 </body>
 </html>
