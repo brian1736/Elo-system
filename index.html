@@ -69,6 +69,7 @@ td.rating{font-family:"Zilla Slab",Georgia,serif;font-size:20px;font-weight:700}
 .up{color:var(--accent)} .down{color:var(--land)}
 .hist{list-style:none;margin:0;padding:0}
 .hist li{padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.hist .hint{margin:2px 0 0}
 .tag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:10px}
 .tag.l{background:var(--land-soft);color:var(--land)} .tag.p{background:var(--peas-soft);color:var(--peas)}
 .full{margin-top:16px}
@@ -95,6 +96,11 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 .chatlog{height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:4px 0 8px;font-size:14px;background:var(--bg)}
 .chatlog p{margin:2px 0;overflow-wrap:anywhere}
 .x{color:var(--muted);border:0;background:none;padding:0 4px;cursor:pointer}
+.pub{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.pubinfo{min-width:0;overflow-wrap:anywhere}
+.pubinfo .hint{margin:0}
+.pubacts{display:flex;gap:6px;flex:0 0 auto}
+.pubacts button{padding:8px 12px}
 @media(max-width:520px){
   .wrap{padding:16px 10px 40px}
   section,details{padding:14px}
@@ -147,11 +153,13 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 
   <section class="full" id="online" aria-labelledby="h-online">
     <h2 id="h-online">Play online</h2>
-    <p class="hint">Three players, one table, and anyone with the link can watch and chat. Use a name that matches the leaderboard and the result is recorded there automatically.</p>
+    <p class="hint">Three players, one table. Every table is public: open tables are listed below, and anyone on the site can join or watch and chat. Use a name that matches the leaderboard and the result is recorded there automatically.</p>
     <label for="oname">Your name</label><input type="text" id="oname" maxlength="24">
     <div id="olobby">
       <div class="row" style="margin-top:12px"><button class="primary" data-act="create" style="margin:0">Create a table</button></div>
       <div class="row" style="margin-top:10px"><input type="text" id="ocode" maxlength="4" placeholder="Table code" aria-label="Table code"><button data-act="join">Join</button></div>
+      <p class="hint" style="margin-top:16px"><b>Open tables</b></p>
+      <div id="opublic"></div>
     </div>
     <div id="otable" hidden></div>
     <details id="orules" hidden>
@@ -188,7 +196,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where, orderBy, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where, orderBy, limit, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 /* ====== PASTE YOUR FIREBASE DETAILS HERE (see setup steps) ====== */
 const firebaseConfig = {
@@ -216,6 +224,7 @@ function $(id){return document.getElementById(id);}
 function el(tag,txt,cls){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e;}
 function sign(x){return(x>=0?"+":"\u2212")+Math.abs(x).toFixed(1);}
 function pct(x){return Math.round(x*100)+"%";}
+function stamp(ms){return ms?new Date(ms).toLocaleString(undefined,{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";}
 function setStatus(t,bad){var s=$("status");s.textContent=t;s.style.color=bad?"var(--land)":"var(--muted)";}
 
 function kf(p,c){return p.g<c.prov?c.kNew:(p.g<c.est?c.kMid:c.kEst);}
@@ -287,6 +296,7 @@ function renderHist(){
     li.appendChild(el("span",g.w?"Landlord won":"Peasants won","tag "+(g.w?"l":"p")));
     li.appendChild(document.createTextNode(" "+g.l+" (landlord) vs "+g.a+" and "+g.b+". "));
     if(r)li.appendChild(el("span",sign(r.dl)+" / "+sign(r.da)+" / "+sign(r.db)));
+    if(g.t)li.appendChild(el("div",stamp(g.t),"hint"));
     u.appendChild(li);
   });
 }
@@ -694,6 +704,43 @@ async function leaveRoom(){
   }catch(e){}
 }
 
+/* ---------- Public table list ---------- */
+var pubRooms=[],lobbyUnsub=null;
+function tmOf(r){return r.t&&r.t.toMillis?r.t.toMillis():Date.now();}
+function startLobby(){
+  if(lobbyUnsub||!db)return;
+  var box=$("opublic");if(box&&!pubRooms.length)box.textContent="Loading tables…";
+  lobbyUnsub=onSnapshot(query(collection(db,"rooms"),limit(50)),function(snap){
+    pubRooms=snap.docs.map(function(d){return Object.assign({code:d.id},d.data());}).sort(function(a,b){return tmOf(b)-tmOf(a);});
+    renderPublic();
+  },function(e){
+    var b=$("opublic");if(b)b.textContent="Can’t load tables: "+e.message;
+    lobbyUnsub=null;setTimeout(startLobby,5000); // retries, so publishing the rules fixes it without a refresh
+  });
+}
+function renderPublic(){
+  var box=$("opublic");if(!box)return;
+  box.innerHTML="";
+  var rows=pubRooms.filter(function(r){return r.seats&&r.names&&r.seats.some(Boolean);});
+  if(!rows.length){box.appendChild(el("p","No open tables yet. Create one above.","empty"));return;}
+  rows.forEach(function(r){
+    var names=r.names.filter(Boolean),open=r.seats.indexOf("")>=0&&(r.phase==="lobby"||r.phase==="done");
+    var row=el("div",null,"pub"),info=el("div",null,"pubinfo");
+    info.appendChild(el("b",r.code));
+    info.appendChild(document.createTextNode(" · "+(r.phase==="lobby"?"waiting":(r.phase==="done"?"finished":"playing"))+" · "+names.length+"/3"));
+    info.appendChild(el("div",names.join(", "),"hint"));
+    row.appendChild(info);
+    var acts=el("div",null,"pubacts");
+    if(open){var j=el("button","Join");j.dataset.act="pjoin";j.dataset.code=r.code;acts.appendChild(j);}
+    var w=el("button","Watch");w.dataset.act="pwatch";w.dataset.code=r.code;acts.appendChild(w);
+    row.appendChild(acts);box.appendChild(row);
+  });
+}
+function watchRoom(c){
+  if(!uid()){omsg("Still connecting. Try again in a moment.");return;}
+  watch(c);omsg("");
+}
+
 /* ---------- Table cleanup ---------- */
 var sweeping=false,sweepTimer=null;
 async function deleteRoom(c,r){
@@ -813,6 +860,7 @@ $("online").onclick=function(e){
   if(t.dataset.id!==undefined){var id=+t.dataset.id;sel[id]=!sel[id];renderOnline();return;}
   var a=t.dataset.act;
   if(a==="create")createRoom();else if(a==="join")joinRoom();
+  else if(a==="pjoin")joinRoom(t.dataset.code);else if(a==="pwatch")watchRoom(t.dataset.code);
   else if(a==="leave")leaveRoom();
   else if(a==="share")shareLink();else if(a==="sit")joinRoom(code);else if(a==="start")deal().catch(function(e){omsg(e.message);});
   else if(a==="bid")bid(t.dataset.v==="true");else if(a==="play")play();else if(a==="lowest")selectLowestPlay();else if(a==="pass")pass();
@@ -858,6 +906,7 @@ if(configured){
     refresh();
     if(u&&pendingCode&&!code){var pc=pendingCode;pendingCode=null;watch(pc);}
     if(u&&!sweepTimer){sweep();sweepTimer=setInterval(sweep,60000);}
+    if(u)startLobby();
     if(!u)signInAnonymously(auth).catch(function(){setStatus("Turn on Anonymous sign-in in Firebase to play online.",true);});
   });
   setStatus("Connecting\u2026");
@@ -867,7 +916,7 @@ if(configured){
     refresh();setStatus("Live: everyone sees the same leaderboard.");
   },function(e){setStatus("Couldn\u2019t load players: "+e.message,true);});
   onSnapshot(query(collection(db,"games"),orderBy("t")),function(snap){
-    S.games=snap.docs.map(function(d){var x=d.data();return{id:d.id,l:x.l,a:x.a,b:x.b,w:x.w};});
+    S.games=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{id:d.id,l:x.l,a:x.a,b:x.b,w:x.w,t:x.t&&x.t.toMillis?x.t.toMillis():null};});
     refresh();
   },function(e){setStatus("Couldn\u2019t load games: "+e.message,true);});
 }else{
