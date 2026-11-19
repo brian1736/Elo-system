@@ -47,7 +47,7 @@ select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-vis
 .seg input:checked + label.l{background:var(--land-soft);border-color:var(--land);color:var(--land);font-weight:600}
 .seg input:checked + label.p{background:var(--peas-soft);border-color:var(--peas);color:var(--peas);font-weight:600}
 .seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
-button{font:inherit;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button{font:inherit;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;width:100%;margin-top:14px}
 button:disabled{opacity:.5;cursor:not-allowed}
 button.link{border:0;background:none;padding:2px 6px;color:var(--muted);text-decoration:underline}
@@ -55,8 +55,10 @@ button.link{border:0;background:none;padding:2px 6px;color:var(--muted);text-dec
 .bar{height:8px;border-radius:4px;background:var(--peas);overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:var(--land)}
 .row{display:flex;gap:8px}
-.row>*{flex:1}
+.row>*{flex:1;min-width:0}
 .row button{flex:0 0 auto}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.actions button,.actions button.primary{flex:1 1 96px;min-width:0;width:auto;margin:0;padding:11px 8px;white-space:normal;line-height:1.2}
 .tablewrap{overflow-x:auto;margin-top:12px}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -82,7 +84,7 @@ body.unlocked #lockForm{display:none}
 .seats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
 .seat{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;overflow-wrap:anywhere}
 .seat.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-.hand{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 12px}
+.hand{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 12px;padding-top:8px}
 .card{min-width:42px;padding:8px 6px;font-size:14px;font-weight:600;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);display:inline-block;text-align:center;line-height:1.2}
 .card.red{color:var(--land)}
 button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
@@ -93,6 +95,15 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 .chatlog{height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:4px 0 8px;font-size:14px;background:var(--bg)}
 .chatlog p{margin:2px 0;overflow-wrap:anywhere}
 .x{color:var(--muted);border:0;background:none;padding:0 4px;cursor:pointer}
+@media(max-width:520px){
+  .wrap{padding:16px 10px 40px}
+  section,details{padding:14px}
+  .seats{gap:6px}
+  .seat{padding:6px;font-size:12px}
+  .hand{gap:3px}
+  .card{min-width:30px;padding:7px 3px;font-size:13px}
+  .actions button,.actions button.primary{flex-basis:80px;font-size:14px}
+}
 </style>
 </head>
 <body>
@@ -177,7 +188,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, writeBatch, onSnapshot, query, orderBy, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where, orderBy, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 /* ====== PASTE YOUR FIREBASE DETAILS HERE (see setup steps) ====== */
 const firebaseConfig = {
@@ -192,6 +203,8 @@ const firebaseConfig = {
 
 const ADMIN_EMAIL="BrianDongg22@gmail.com";
 const LOCK_GAMES=false;
+const DEL_MS=5*60*1000;          // a finished or empty table is deleted this long after
+const MAX_AGE_MS=12*3600*1000;   // safety net: any table older than this is deleted
 
 const DEF={start:500,scale:400,offset:0,kNew:40,kMid:24,kEst:16,prov:20,est:100};
 const configured=!firebaseConfig.apiKey.startsWith("PASTE");
@@ -349,7 +362,7 @@ $("impBtn").onclick=async function(){
 /* ---------- Online play ---------- */
 var CL=["3","4","5","6","7","8","9","10","J","Q","K","A","2"],SU=["\u2660","\u2665","\u2666","\u2663"];
 var room=null,code=null,hand=[],sel={},unsubs=[],acted="";
-var spectatorHands={}; // Store all hands for spectators
+var specUnsub=null,specMap={}; // spectators: uid -> cards, read from the public "view" collection
 function cv(i){return i>51?i-39:i>>2;}
 function clab(i){return i>51?(i==52?"Jkr":"JKR"):CL[i>>2]+SU[i&3];}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return"&#"+c.charCodeAt(0)+";";});}
@@ -357,6 +370,8 @@ function uid(){return auth&&auth.currentUser?auth.currentUser.uid:null;}
 function seat(){return room?room.seats.indexOf(uid()):-1;}
 function rref(){return doc(db,"rooms",code);}
 function href(id){return doc(db,"rooms",code,"hands",id);}
+function vref(id){return doc(db,"rooms",code,"view",id);}
+function delAt(){return new Date(Date.now()+DEL_MS);}
 function omsg(t){$("omsg").textContent=t||"";}
 function canon(n){return S.players.filter(function(p){return p.toLowerCase()===String(n).toLowerCase();})[0];}
 
@@ -413,37 +428,115 @@ function beats(p,c){
   return c.t===p.t&&c.n===p.n&&c.v>p.v;
 }
 
+/* Lowest legal play. Leading: the lowest single card. Following: the lowest
+   combination of the same type that beats the last play, then the lowest bomb,
+   then the rocket. Returns an array of card ids, or null if nothing can beat it. */
+function lowestPlay(cards,lastPlay){
+  var by={},vals=[];
+  cards.slice().sort(function(a,b){return a-b;}).forEach(function(c){var v=cv(c);if(!by[v]){by[v]=[];vals.push(v);}by[v].push(c);});
+  vals.sort(function(a,b){return a-b;});
+  if(!vals.length)return null;
+  if(!lastPlay)return[by[vals[0]][0]];
+  var last=classify(lastPlay.cards,R());
+  if(!last)return null;
+  var lim=R().twos?12:11;
+  function n(v){return by[v]?by[v].length:0;}
+  function take(v,k){return by[v].slice(0,k);}
+  function singles(ex,k){
+    var out=[];
+    for(var i=0;i<vals.length&&out.length<k;i++){
+      var v=vals[i];if(ex.indexOf(v)>=0)continue;
+      for(var j=0;j<by[v].length&&out.length<k;j++)out.push(by[v][j]);
+    }
+    return out.length===k?out:null;
+  }
+  function pairs(ex,k){
+    var out=[],got=0;
+    for(var i=0;i<vals.length&&got<k;i++){
+      var v=vals[i];if(v>12||ex.indexOf(v)>=0||n(v)<2)continue;
+      out=out.concat(take(v,2));got++;
+    }
+    return got===k?out:null;
+  }
+  function runs(len,per){
+    var out=[];
+    for(var s=last.v+1;s+len-1<=lim;s++){
+      var ok=true,i;
+      for(i=0;i<len;i++)if(n(s+i)<per){ok=false;break;}
+      if(!ok)continue;
+      var cs=[],vs=[];
+      for(i=0;i<len;i++){cs=cs.concat(take(s+i,per));vs.push(s+i);}
+      out.push({cs:cs,vs:vs});
+    }
+    return out;
+  }
+  var cands=[],t=last.t,i,v,x;
+  if(t==="x"){
+    for(i=0;i<vals.length;i++){v=vals[i];if(v<=last.v)continue;
+      if(last.n===1||(v<=12&&n(v)>=last.n))cands.push(take(v,last.n));}
+  }else if(t==="t1"||t==="t2"){
+    for(i=0;i<vals.length;i++){v=vals[i];if(v<=last.v||v>12||n(v)<3)continue;
+      x=t==="t1"?singles([v],1):pairs([v],1);
+      if(x)cands.push(take(v,3).concat(x));}
+  }else if(t==="st"){
+    runs(last.n,1).forEach(function(r){cands.push(r.cs);});
+  }else if(t==="ps"){
+    runs(last.n/2,2).forEach(function(r){cands.push(r.cs);});
+  }else if(t==="f2"){
+    for(i=0;i<vals.length;i++){v=vals[i];if(v<=last.v||v>12||n(v)<4)continue;
+      x=last.w===1?singles([v],2):pairs([v],2);
+      if(x)cands.push(take(v,4).concat(x));}
+  }else if(/^ap\d$/.test(t)){
+    var k=+t.slice(2);
+    runs(k,3).forEach(function(r){
+      if(last.w===0){cands.push(r.cs);return;}
+      var y=last.w===1?singles(r.vs,k):pairs(r.vs,k);
+      if(y)cands.push(r.cs.concat(y));
+    });
+  }
+  for(i=0;i<cands.length;i++){
+    var cl=classify(cands[i],R());
+    if(cl&&allowed(cl,R())&&beats(last,cl))return cands[i];
+  }
+  if(last.t!=="rocket"){
+    if(R().bomb)for(i=0;i<vals.length;i++){v=vals[i];if(v<=12&&n(v)===4&&(last.t!=="bomb"||v>last.v))return take(v,4);}
+    if(R().rocket&&n(13)&&n(14))return[by[13][0],by[14][0]];
+  }
+  return null;
+}
+
 function watch(c){
-  unsubs.forEach(function(u){u();});unsubs=[];code=c;hand=[];sel={};spectatorHands={};
+  unsubs.forEach(function(u){u();});unsubs=[];code=c;hand=[];sel={};specUnsub=null;specMap={};
   $("olog").innerHTML="";
   if(location.hash.slice(1)!==c)history.replaceState(null,"","#"+c);
-  
+
   unsubs.push(onSnapshot(rref(),function(d){
     room=d.exists()?d.data():null;
-    if(!room){omsg("That table doesn\u2019t exist.");}
-    else {
-      // If spectator, watch all seat hands so they can see them
-      if(seat() < 0 && room.seats) {
-        room.seats.forEach(function(sUid, idx) {
-          if(sUid) {
-            unsubs.push(onSnapshot(href(sUid), function(hd){
-              spectatorHands[idx] = hd.exists() ? hd.data().cards : [];
-              renderOnline();
-            }, function(){}));
-          }
-        });
-      }
-    }
+    if(!room)omsg("That table doesn\u2019t exist (it may have been cleaned up).");
     onRoom();
   },function(e){omsg(e.message);}));
 
   unsubs.push(onSnapshot(href(uid()),function(d){hand=d.exists()?d.data().cards:[];var s2={};hand.forEach(function(x){if(sel[x])s2[x]=1;});sel=s2;renderOnline();},function(){}));
-  
+
   unsubs.push(onSnapshot(query(collection(db,"rooms",c,"chat"),orderBy("t"),limitToLast(50)),function(snap){
     var l=$("olog");l.innerHTML="";
     snap.forEach(function(d){var m=d.data(),p=document.createElement("p"),b=document.createElement("b");b.textContent=m.name+": ";p.appendChild(b);p.appendChild(document.createTextNode(m.text));l.appendChild(p);});
     l.scrollTop=l.scrollHeight;
   },function(){}));
+}
+
+/* Spectators listen to one public "view" collection that mirrors every seat's hand. */
+function syncSpectate(){
+  if(!room||!code)return;
+  if(seat()<0&&!specUnsub){
+    specUnsub=onSnapshot(collection(db,"rooms",code,"view"),function(snap){
+      var m={};snap.forEach(function(d){m[d.id]=d.data().cards||[];});
+      specMap=m;renderOnline();
+    },function(e){omsg("Can\u2019t load hands to spectate: "+e.message);});
+    unsubs.push(specUnsub);
+  }else if(seat()>=0&&specUnsub){
+    specUnsub();specUnsub=null;specMap={};
+  }
 }
 
 function onRoom(){
@@ -452,37 +545,37 @@ function onRoom(){
     if(room.phase==="resolve"&&room.host===uid()&&acted!==key){acted=key;resolve().catch(function(e){omsg(e.message);});}
     if(room.phase==="done"&&seat()===room.winner&&acted!==key){acted=key;record();}
   }
+  syncSpectate();
   renderOnline();
 }
 
-async function deal(){
+async function deal(again){
   var d=[],i,j,x;for(i=0;i<54;i++)d.push(i);
   for(i=53;i>0;i--){j=Math.floor(Math.random()*(i+1));x=d[i];d[i]=d[j];d[j]=x;}
   var b=writeBatch(db);
-  for(i=0;i<3;i++)b.set(href(room.seats[i]),{cards:d.slice(i*17,i*17+17)});
+  for(i=0;i<3;i++){
+    var cs=d.slice(i*17,i*17+17);
+    b.set(href(room.seats[i]),{cards:cs});
+    b.set(vref(room.seats[i]),{cards:cs});
+  }
   b.set(href("kitty"),{cards:d.slice(51)});
-  b.update(rref(),{phase:"bid",bidTurn:Math.floor(Math.random()*3),bids:[null,null,null],counts:[17,17,17],last:null,passes:0,landlord:-1,kitty:[],winner:-1,turn:-1,gameNo:room.gameNo+1});
+  b.update(rref(),{phase:"bid",bids:[null,null,null],counts:[17,17,17],last:null,passes:0,landlord:-1,kitty:[],winner:-1,winnerName:"",turn:-1,gameNo:room.gameNo+1,deleteAt:null,note:again?"Nobody wanted to be landlord, so the cards were reshuffled.":""});
   await b.commit();
 }
 
 async function resolve(){
-  var bids = room.bids || [false,false,false];
-  var yesIndices = [];
-  bids.forEach(function(val, idx){ if(val === true) yesIndices.push(idx); });
-
-  var hs = -1;
-  if(yesIndices.length > 0){
-    // Randomly pick one among those who said Yes
-    hs = yesIndices[Math.floor(Math.random() * yesIndices.length)];
-  } else {
-    // Nobody said yes -> re-deal automatically so game doesn't stall
-    return deal();
-  }
-
+  var bids=room.bids||[false,false,false],yes=[];
+  bids.forEach(function(v,i){if(v===true)yes.push(i);});
+  // Nobody said yes: reshuffle everyone's hands and ask again
+  if(!yes.length)return deal(true);
+  // One or more said yes: pick randomly among them
+  var hs=yes[Math.floor(Math.random()*yes.length)];
   var k=(await getDoc(href("kitty"))).data().cards,ld=room.seats[hs],cards=(await getDoc(href(ld))).data().cards.concat(k),counts=room.counts.slice();
   counts[hs]=20;
-  var b=writeBatch(db);b.set(href(ld),{cards:cards});
-  b.update(rref(),{phase:"play",landlord:hs,hs:hs,kitty:k,turn:hs,counts:counts,last:null,passes:0});
+  var b=writeBatch(db);
+  b.set(href(ld),{cards:cards});
+  b.set(vref(ld),{cards:cards});
+  b.update(rref(),{phase:"play",landlord:hs,hs:hs,kitty:k,turn:hs,counts:counts,last:null,passes:0,note:""});
   await b.commit();
 }
 
@@ -493,11 +586,18 @@ function record(){
   setDoc(doc(db,"games","online_"+code+"_"+room.gameNo),{l:nm[L],a:nm[(L+1)%3],b:nm[(L+2)%3],w:room.winner===L,t:serverTimestamp()}).catch(function(){});
 }
 
+/* Everyone answers yes or no at the same time; answers stay hidden until all three are in. */
 function bid(v){
-  var s=seat(),b=room.bids.slice();
-  b[s]=v;
-  var done=b.every(function(x){return x!==null;});
-  updateDoc(rref(),done?{bids:b,phase:"resolve"}:{bids:b,bidTurn:(s+1)%3}).catch(function(e){omsg(e.message);});
+  var s=seat();if(s<0)return;
+  var rr=rref();
+  runTransaction(db,async function(tx){
+    var d=await tx.get(rr);if(!d.exists())return;
+    var r=d.data();if(r.phase!=="bid")return;
+    var b=(r.bids||[null,null,null]).slice();
+    if(b[s]!==null)return;
+    b[s]=v;
+    tx.update(rr,b.every(function(x){return x!==null;})?{bids:b,phase:"resolve"}:{bids:b});
+  }).catch(function(e){omsg(e.message);});
 }
 
 function play(){
@@ -506,26 +606,29 @@ function play(){
   if(!allowed(cl,R())){omsg("That combination isn\u2019t allowed at this table.");return;}
   var last=room.last&&room.last.seat!==s?room.last:null;
   if(!beats(last,cl)){omsg("That doesn\u2019t beat the last play.");return;}
-  
+
   var left=hand.filter(function(c){return !sel[c];}),counts=room.counts.slice();counts[s]=left.length;
-  
-  var nextTurn = (cl.t === "rocket") ? s : (s + 1) % 3;
-  var passesCount = (cl.t === "rocket") ? 2 : 0;
+
+  var nextTurn=(cl.t==="rocket")?s:(s+1)%3;
+  var passesCount=(cl.t==="rocket")?2:0;
 
   var up={last:{seat:s,cards:ids,t:cl.t,n:cl.n,v:cl.v},counts:counts,passes:passesCount,turn:nextTurn};
-  if(!left.length){up.phase="done";up.winner=s;up.turn=-1;}
+  if(!left.length){up.phase="done";up.winner=s;up.winnerName=room.names[s];up.turn=-1;up.deleteAt=delAt();}
   sel={};omsg("");
-  setDoc(href(uid()),{cards:left}).then(function(){return updateDoc(rref(),up);}).catch(function(e){omsg(e.message);});
+  var b=writeBatch(db);
+  b.set(href(uid()),{cards:left});
+  b.set(vref(uid()),{cards:left});
+  b.commit().then(function(){return updateDoc(rref(),up);}).catch(function(e){omsg(e.message);});
 }
 
 function selectLowestPlay(){
-  if(!hand.length)return;
-  var sorted=hand.slice().sort(function(a,b){return cv(a)-cv(b)||(a-b);});
+  if(!room||!hand.length)return;
+  var s=seat(),last=room.last&&room.last.seat!==s?room.last:null;
+  var pick=lowestPlay(hand,last);
   sel={};
-  if(sorted.length>0){
-    sel[sorted[0]]=1;
-  }
-  renderOnline();
+  if(!pick){omsg("Nothing in your hand can beat that. You\u2019ll have to pass.");renderOnline();return;}
+  pick.forEach(function(c){sel[c]=1;});
+  omsg("");renderOnline();
 }
 
 function pass(){
@@ -542,7 +645,7 @@ function myName(){
 async function createRoom(){
   var n=myName();if(!n)return;
   var c="",A="ABCDEFGHJKLMNPQRSTUVWXYZ";for(var i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];
-  try{await setDoc(doc(db,"rooms",c),{host:uid(),seats:[uid(),"",""],names:[n,"",""],phase:"lobby",gameNo:0,counts:[0,0,0],rules:HARD_RULES,t:serverTimestamp()});watch(c);omsg("");}
+  try{await setDoc(doc(db,"rooms",c),{host:uid(),seats:[uid(),"",""],names:[n,"",""],phase:"lobby",gameNo:0,counts:[0,0,0],rules:HARD_RULES,deleteAt:null,t:serverTimestamp()});watch(c);omsg("");}
   catch(e){omsg(e.message);}
 }
 async function joinRoom(c){
@@ -554,14 +657,77 @@ async function joinRoom(c){
     var r=d.data();
     if(r.seats.indexOf(uid())<0){
       var i=r.seats.indexOf("");
-      if(i<0||r.phase!=="lobby"){omsg("That table is full or already playing.");return;}
+      if(i<0||(r.phase!=="lobby"&&r.phase!=="done")){omsg("That table is full or already playing.");return;}
       if(r.names.some(function(x){return x.toLowerCase()===n.toLowerCase();})){omsg("Someone at that table already has that name.");return;}
       r.seats[i]=uid();r.names[i]=n;
-      await updateDoc(doc(db,"rooms",c),{seats:r.seats,names:r.names});
+      var up={seats:r.seats,names:r.names,deleteAt:null};
+      if(r.seats.indexOf(r.host)<0)up.host=uid(); // the old host left
+      await updateDoc(doc(db,"rooms",c),up);
     }
     watch(c);omsg("");
   }catch(e){omsg(e.message);}
 }
+/* Leaving a table that isn't mid-game frees the seat. If nobody is left, the table is deleted in 5 minutes. */
+async function leaveRoom(){
+  var c=code,me=uid(),wasSeated=seat()>=0;
+  unsubs.forEach(function(u){u();});unsubs=[];specUnsub=null;specMap={};
+  room=null;code=null;hand=[];$("olog").innerHTML="";
+  history.replaceState(null,"",location.pathname+location.search);
+  renderOnline();omsg("");
+  if(!c||!me||!wasSeated)return;
+  try{
+    var rr=doc(db,"rooms",c),freed=false;
+    await runTransaction(db,async function(tx){
+      var d=await tx.get(rr);if(!d.exists())return;
+      var r=d.data(),i=r.seats.indexOf(me);
+      if(i<0||(r.phase!=="lobby"&&r.phase!=="done"))return;
+      var seats=r.seats.slice(),names=r.names.slice();seats[i]="";names[i]="";
+      var rest=seats.filter(Boolean),up={seats:seats,names:names};
+      if(!rest.length)up.deleteAt=delAt();
+      else if(r.host===me)up.host=rest[0];
+      tx.update(rr,up);freed=true;
+    });
+    if(freed){
+      deleteDoc(doc(db,"rooms",c,"hands",me)).catch(function(){});
+      deleteDoc(doc(db,"rooms",c,"view",me)).catch(function(){});
+    }
+  }catch(e){}
+}
+
+/* ---------- Table cleanup ---------- */
+var sweeping=false,sweepTimer=null;
+async function deleteRoom(c,r){
+  var kill=function(ref){return deleteDoc(ref).catch(function(){});};
+  var subs=["chat","view"];
+  for(var i=0;i<subs.length;i++){
+    try{var snap=await getDocs(collection(db,"rooms",c,subs[i]));await Promise.all(snap.docs.map(function(d){return kill(d.ref);}));}catch(e){}
+  }
+  var ids=["kitty"].concat((r.seats||[]).filter(Boolean));
+  await Promise.all(ids.map(function(id){return kill(doc(db,"rooms",c,"hands",id));}));
+  await deleteDoc(doc(db,"rooms",c));
+}
+async function sweepQuery(q,test){
+  var snap=await getDocs(q);
+  for(var i=0;i<snap.docs.length;i++){
+    var d=snap.docs[i],fresh=await getDoc(d.ref);
+    if(!fresh.exists())continue;
+    var r=fresh.data();
+    if(test(r))await deleteRoom(d.id,r);
+  }
+}
+async function sweep(){
+  if(!db||!uid()||sweeping)return;
+  sweeping=true;
+  try{
+    var now=Date.now();
+    // finished or empty tables whose 5 minutes are up (re-checked right before deleting)
+    await sweepQuery(query(collection(db,"rooms"),where("deleteAt","<=",new Date(now))),function(r){return r.deleteAt&&r.deleteAt.toMillis()<=Date.now();});
+    // abandoned tables nobody ever left or finished
+    await sweepQuery(query(collection(db,"rooms"),where("t","<",new Date(now-MAX_AGE_MS))),function(r){return true;});
+  }catch(e){}
+  sweeping=false;
+}
+
 function cardH(c,btn){
   var red=c<52?((c&3)==1||(c&3)==2):c==53,tag=btn?"button":"span";
   return"<"+tag+(btn?' data-id="'+c+'"':"")+' class="card'+(red?" red":"")+(sel[c]?" sel":"")+'">'+clab(c)+"</"+tag+">";
@@ -571,58 +737,71 @@ function renderOnline(){
   $("olobby").hidden=!!room;$("otable").hidden=!room;$("ochatbox").hidden=!room;
   if($("orules")) $("orules").hidden=true;
   if(!room)return;
-  
+
   var s=seat(),ph=room.phase,h="",i;
   h+='<p><b>Table '+esc(code)+'</b> <button class="link" data-act="share">Copy link</button> <button class="link" data-act="leave">Leave</button></p><div class="seats">';
   for(i=0;i<3;i++){
     var n=room.names[i],cn=n&&canon(n);
-    var bidStatus = "";
-    if(ph==="bid" && room.bids && room.bids[i] !== null) {
-      bidStatus = " · bid: " + (room.bids[i] ? "Yes" : "No");
+    var bidStatus="",pending=false;
+    if(ph==="bid"&&room.bids){
+      pending=room.bids[i]===null;
+      bidStatus=pending?"deciding\u2026":"ready \u2713";
     }
-    h+='<div class="seat'+((room.turn===i||(ph==="bid"&&room.bidTurn===i))?" on":"")+'"><b>'+(n?esc(n):"Empty seat")+"</b>"+(cn&&T[cn]?" \u00b7 "+Math.round(T[cn].r):"")+"<br>"+
-      (room.landlord===i?'<span class="tag l">Landlord</span> ':"")+(ph==="play"||ph==="done"?room.counts[i]+" cards":"")+bidStatus+"</div>";
+    h+='<div class="seat'+((room.turn===i||(ph==="bid"&&n&&pending))?" on":"")+'"><b>'+(n?esc(n):"Empty seat")+"</b>"+(cn&&T[cn]?" \u00b7 "+Math.round(T[cn].r):"")+"<br>"+
+      (room.landlord===i&&(ph==="play"||ph==="done")?'<span class="tag l">Landlord</span> ':"")+(ph==="play"||ph==="done"?room.counts[i]+" cards":"")+bidStatus+"</div>";
   }
   h+="</div>";
 
   var full=room.seats.indexOf("")<0,mine=s===room.turn,nm=function(k){return esc(room.names[k]);};
   if(ph==="lobby"||ph==="done"){
-    if(ph==="done")h+="<p><b>"+nm(room.winner)+" wins \u2014 "+(room.winner===room.landlord?"the landlord wins.":"the peasants win.")+"</b></p>";
-    h+=room.host===uid()?(full?'<button class="primary" data-act="start">'+(ph==="done"?"Play again":"Deal")+"</button>":"<p>Waiting for two more players\u2026</p>"):(s<0?((full||ph!=="lobby")?"<p>You\u2019re watching this table.</p>":'<p>You\u2019re watching. <button data-act="sit">Take a seat</button></p>'):"<p>Waiting for the host to deal\u2026</p>");
+    if(ph==="done"){
+      var wn=esc(room.winnerName||room.names[room.winner]||"Someone");
+      h+="<p><b>"+wn+" wins \u2014 "+(room.winner===room.landlord?"the landlord wins.":"the peasants win.")+"</b></p>";
+      h+='<p class="hint">This table closes 5 minutes after the game ends unless you play again.</p>';
+    }
+    var open=ph==="lobby"||ph==="done";
+    h+=room.host===uid()?(full?'<button class="primary" data-act="start">'+(ph==="done"?"Play again":"Deal")+"</button>":"<p>Waiting for two more players\u2026</p>"):(s<0?((full||!open)?"<p>You\u2019re watching this table.</p>":'<p>You\u2019re watching. <button data-act="sit">Take a seat</button></p>'):"<p>Waiting for the host to deal\u2026</p>");
   }else if(ph==="bid"||ph==="resolve"){
-    if(ph==="bid"&&room.bidTurn===s){
-      h+='<p>Do you want to be the Landlord?</p><div class="row"><button class="primary" data-act="bid" data-v="true" style="margin:0">Yes</button><button data-act="bid" data-v="false">No</button></div>';
+    if(room.note)h+='<p class="hint"><b>'+esc(room.note)+"</b></p>";
+    if(ph==="bid"&&s>=0&&room.bids&&room.bids[s]===null){
+      h+='<p>Do you want to be the Landlord?</p><div class="actions"><button class="primary" data-act="bid" data-v="true">Yes</button><button data-act="bid" data-v="false">No</button></div>';
+    }else if(s>=0&&room.bids&&room.bids[s]!==null){
+      h+="<p>You said "+(room.bids[s]?"yes":"no")+". Waiting for everyone else to choose\u2026</p>";
     }else{
-      h+="<p>Bidding for landlord (Yes/No)…</p>";
+      h+="<p>Waiting for the players to choose whether to be landlord\u2026</p>";
     }
   }else if(ph==="play"){
+    if(room.bids){
+      var ys=[];room.bids.forEach(function(b,k){if(b===true)ys.push(room.names[k]);});
+      if(ys.length>1)h+='<p class="hint">'+ys.map(esc).join(", ")+" all said yes, so the landlord was picked at random.</p>";
+    }
     h+="<p>Landlord\u2019s extra cards: "+room.kitty.map(function(c){return cardH(c);}).join("")+"</p>";
     h+="<p>"+(room.last?nm(room.last.seat)+" played:":"Lead with anything.")+"</p><div class=\"hand\">"+(room.last?room.last.cards.slice().sort(function(a,b){return cv(a)-cv(b);}).map(function(c){return cardH(c);}).join(""):"")+"</div>";
-    
+
     if(mine){
-      h+='<p><b>Your turn</b></p><div class="row">';
-      h+='<button class="primary" data-act="play" style="margin:0">Play selected</button>';
-      h+='<button data-act="lowest">Lowest Play</button>';
+      h+='<p><b>Your turn</b></p><div class="actions">';
+      h+='<button class="primary" data-act="play">Play selected</button>';
+      h+='<button data-act="lowest">Lowest play</button>';
       if(room.last&&room.last.seat!==s){
         h+='<button data-act="pass">Pass</button>';
       }
       h+='</div>';
-    } else {
+    }else{
       h+="<p>Waiting for "+nm(room.turn)+"\u2026</p>";
     }
   }
 
-  // Spectator view: show all hands if s < 0
-  if(s < 0 && ph !== "lobby") {
-    h+='<p class="hint"><b>Spectator Mode: All Hands</b></p>';
-    for(i=0; i<3; i++) {
-      var sCards = spectatorHands[i] || [];
-      h+='<p><b>'+(room.names[i] ? esc(room.names[i]) : "Seat "+(i+1))+'\'s hand:</b></p>';
-      h+='<div class="hand">'+sCards.slice().sort(function(a,b){return cv(b)-cv(a)||b-a;}).map(function(c){return cardH(c,false);}).join("")+'</div>';
+  // Spectators see every hand
+  if(s<0&&ph!=="lobby"){
+    h+='<p class="hint"><b>Spectating: all hands</b></p>';
+    for(i=0;i<3;i++){
+      var sCards=specMap[room.seats[i]]||[];
+      h+='<p><b>'+(room.names[i]?esc(room.names[i]):"Seat "+(i+1))+"\u2019s hand ("+sCards.length+"):</b></p>";
+      h+='<div class="hand">'+sCards.slice().sort(function(a,b){return cv(b)-cv(a)||b-a;}).map(function(c){return cardH(c,false);}).join("")+"</div>";
     }
   }
 
-  if(s>=0 && hand.length){
+  if(s>=0&&hand.length){
     h+='<p class="hint">Your hand</p><div class="hand">'+hand.slice().sort(function(a,b){return cv(b)-cv(a)||b-a;}).map(function(c){return cardH(c,true);}).join("")+"</div>";
   }
 
@@ -634,9 +813,9 @@ $("online").onclick=function(e){
   if(t.dataset.id!==undefined){var id=+t.dataset.id;sel[id]=!sel[id];renderOnline();return;}
   var a=t.dataset.act;
   if(a==="create")createRoom();else if(a==="join")joinRoom();
-  else if(a==="leave"){unsubs.forEach(function(u){u();});unsubs=[];room=null;code=null;hand=[];spectatorHands={};$("olog").innerHTML="";history.replaceState(null,"",location.pathname+location.search);renderOnline();omsg("");}
+  else if(a==="leave")leaveRoom();
   else if(a==="share")shareLink();else if(a==="sit")joinRoom(code);else if(a==="start")deal().catch(function(e){omsg(e.message);});
-  else if(a==="bid")bid(t.dataset.v === "true");else if(a==="play")play();else if(a==="lowest")selectLowestPlay();else if(a==="pass")pass();
+  else if(a==="bid")bid(t.dataset.v==="true");else if(a==="play")play();else if(a==="lowest")selectLowestPlay();else if(a==="pass")pass();
 };
 
 function shareLink(){
@@ -678,6 +857,7 @@ if(configured){
     document.body.classList.toggle("unlocked",ad);
     refresh();
     if(u&&pendingCode&&!code){var pc=pendingCode;pendingCode=null;watch(pc);}
+    if(u&&!sweepTimer){sweep();sweepTimer=setInterval(sweep,60000);}
     if(!u)signInAnonymously(auth).catch(function(){setStatus("Turn on Anonymous sign-in in Firebase to play online.",true);});
   });
   setStatus("Connecting\u2026");
@@ -695,3 +875,5 @@ if(configured){
 }
 refresh();
 </script>
+</body>
+</html>
