@@ -146,7 +146,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
     <details id="orules" hidden>
       <summary>Table rules</summary>
       <p class="hint" id="orulesNote"></p>
-      <div class="rules"><label><input type="checkbox" data-r="single"> Single card</label><label><input type="checkbox" data-r="pair"> Pair</label><label><input type="checkbox" data-r="triple"> Triple</label><label><input type="checkbox" data-r="t1"> Triple + single</label><label><input type="checkbox" data-r="t2"> Triple + pair</label><label><input type="checkbox" data-r="st"> Straight</label><label><input type="checkbox" data-r="ps"> Pair straight</label><label><input type="checkbox" data-r="ap"> Airplane, no wings</label><label><input type="checkbox" data-r="apw1"> Airplane + single wings</label><label><input type="checkbox" data-r="apw2"> Airplane + pair wings</label><label><input type="checkbox" data-r="f2s"> Four + two singles</label><label><input type="checkbox" data-r="f2p"> Four + two pairs</label><label><input type="checkbox" data-r="bomb"> Bomb (four of a kind)</label><label><input type="checkbox" data-r="rocket"> Rocket (both jokers)</label><label><input type="checkbox" data-r="twos"> Allow 2s in straights</label>
+      <div class="rules"><label><input type="checkbox" data-r="single"> Single card</label><label><input type="checkbox" data-r="pair"> Pair</label><label><input type="checkbox" data-r="triple"> Triple</label><label><input type="checkbox" data-r="t1"> Triple + single</label><label><input type="checkbox" data-r="t2"> Triple + pair</label><label><input type="checkbox" data-r="st"> Straight</label><label><input type="checkbox" data-r="ps"> Pair straight</label><label><input type="checkbox" data-r="ap"> Cnsctv triple</label><label><input type="checkbox" data-r="apw1"> Cnsctv triple + single</label><label><input type="checkbox" data-r="apw2"> Cnsctv triple + double</label><label><input type="checkbox" data-r="f2s"> bomb + two singles</label><label><input type="checkbox" data-r="f2p"> Four + two pairs</label><label><input type="checkbox" data-r="bomb"> Bomb (four of a kind)</label><label><input type="checkbox" data-r="rocket"> Rocket (both jokers)</label><label><input type="checkbox" data-r="twos"> Allow 2s in straights</label>
         <label>Shortest straight (cards) <input type="number" data-r="stMin" min="3" max="12"></label>
         <label>Shortest pair straight (pairs) <input type="number" data-r="psMin" min="2" max="10"></label>
       </div>
@@ -191,7 +191,7 @@ const firebaseConfig = {
 /* ================================================================ */
 
 /* The passcode is the password of one shared Firebase login with this email (see setup steps). */
-const ADMIN_EMAIL="admin@landlord-elo.example";
+const ADMIN_EMAIL="BrianDongg22@gmail.com";
 /* Set to true (and use the stricter rules) if recording games should also need the passcode. */
 const LOCK_GAMES=false;
 
@@ -372,7 +372,7 @@ function classify(ids,r){
   function cnt(k){return ks.filter(function(v){return c[v]===k;});}
   function run(a){for(var i=1;i<a.length;i++)if(a[i]!==a[i-1]+1)return false;return a.length>0&&a[a.length-1]<=lim;}
   if(!n)return null;
-  if(n==2&&c[13]&&c[14])return{t:"rocket",n:2,v:99};
+  if(n==2&&c[13]&&c[14])return{t:"nuke",n:2,v:99};
   if(n==4&&ks.length==1)return{t:"bomb",n:4,v:vs[0]};
   if(n<=3&&ks.length==1)return{t:"x",n:n,v:vs[0]};
   if(n==4&&cnt(3).length==1)return{t:"t1",n:4,v:cnt(3)[0]};
