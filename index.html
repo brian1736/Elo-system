@@ -215,7 +215,7 @@ const firebaseConfig = {
 };
 /* ================================================================ */
 
-const ADMIN_EMAIL="BrianDong22@gmail.com";
+const ADMIN_EMAIL="BrianDongg22@gmail.com";
 const LOCK_GAMES=false;
 const DEL_MS=5*60*1000;          // a finished or empty table is deleted this long after
 const MAX_AGE_MS=12*3600*1000;   // safety net: any table older than this is deleted
@@ -578,15 +578,21 @@ function watch(c){
   /* who has this table open */
   unsubs.push(onSnapshot(collection(db,"rooms",c,"presence"),function(snap){
     watchers=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{uid:d.id,name:x.name||"Guest",t:x.t&&x.t.toMillis?x.t.toMillis():Date.now()};});
-    renderOnline();
+    refreshWatchers();
   },function(){}));
   watchStart=Date.now();
-  presTimer=setInterval(function(){beat();renderOnline();},15000);
+  presTimer=setInterval(function(){beat();refreshWatchers();},15000);
   setTimeout(beat,1500);
 }
 
 /* Non-seated viewers announce themselves every 20 seconds so others can see who is watching. */
 function myLabel(){var s=seat();return(room&&s>=0)?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");}
+var wSig="";
+function watchSig(){
+  var now=Date.now();
+  return watchers.filter(function(x){return room&&room.seats.indexOf(x.uid)<0&&now-x.t<=PRESENCE_MS;}).map(function(x){return x.uid+":"+x.name;}).sort().join("|");
+}
+function refreshWatchers(){var sg=watchSig();if(sg!==wSig){wSig=sg;renderOnline();}}
 function beat(){
   if(!db||!code||!uid()||!room)return;
   setDoc(pref(uid()),{name:myLabel(),t:serverTimestamp()}).catch(function(){});
@@ -676,10 +682,11 @@ function bid(v){
 
 function play(){
   var N=NP(),s=seat(),ids=hand.filter(function(c){return sel[c];}),cl=classify(ids,R());
-  if(!cl){omsg("That isn\u2019t a valid combination.");return;}
+  if(!ids.length){omsg("Tap the cards you want to play first.");return;}
+  if(!cl){omsg(ids.length+" card"+(ids.length===1?"":"s")+" selected: that isn\u2019t a valid combination.");return;}
   if(!allowed(cl,R())){omsg("That combination isn\u2019t allowed at this table.");return;}
   var last=room.last&&room.last.seat!==s?room.last:null;
-  if(!beats(last,cl)){omsg("That doesn\u2019t beat the last play.");return;}
+  if(!beats(last,cl)){omsg("That "+comboName(cl).toLowerCase()+" doesn\u2019t beat the last play ("+(room.shown?room.shown.label:"previous play")+"). Play the same kind of combination with higher cards, a bomb, or the rocket.");return;}
 
   var left=hand.filter(function(c){return !sel[c];}),counts=room.counts.slice();counts[s]=left.length;
 
@@ -692,7 +699,12 @@ function play(){
   var b=writeBatch(db);
   b.set(href(uid()),{cards:left});
   b.set(vref(uid()),{cards:left});
-  b.commit().then(function(){return updateDoc(rref(),up);}).catch(function(e){omsg(e.message);});
+  b.update(rref(),up);
+  b.commit().catch(function(e){
+    ids.forEach(function(c){sel[c]=1;});
+    omsg("Couldn\u2019t play that: "+e.message);
+    renderOnline();
+  });
 }
 
 function selectLowestPlay(){
