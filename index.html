@@ -150,19 +150,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 
   <section class="full" id="online" aria-labelledby="h-online">
     <h2 id="h-online">Play online</h2>
-    <p class="hint">Choose landlord, 2v2 teams, or free-for-all. Rated tables count towards the leaderboard when your name matches an existing leaderboard player. Secure your identity with an email and password below.</p>
-    
-    <div id="authBox" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:12px;">
-      <label>Player Account (Password Protection)</label>
-      <div class="row" style="margin-top:4px;">
-        <input type="email" id="uemail" placeholder="Email address" maxlength="40">
-        <input type="password" id="upass" placeholder="Password (6+ chars)" maxlength="40">
-      </div>
-      <div class="row" style="margin-top:6px;">
-        <button type="button" id="btnRegister">Register Account</button>
-        <button type="button" id="btnLogin">Log In</button>
-      </div>
-    </div>
+    <p class="hint">Choose landlord, 2v2 teams, or free-for-all. Rated tables count towards the leaderboard when your name matches an existing leaderboard player.</p>
 
     <label for="oname">Your exact leaderboard name (Required for Rated)</label>
     <input type="text" id="oname" maxlength="24" placeholder="Match your leaderboard name">
@@ -397,7 +385,6 @@ function cb(i){return i%54;}
 function cv(i){var b=cb(i);return b>51?b-39:b>>2;}
 function clab(i){var b=cb(i);return b>51?(b==52?"Jkr":"JKR"):CL[b>>2]+SU[b&3];}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return"&#"+c.charCodeAt(0)+";";});}
-function uid(){return auth&&auth.currentUser?auth.currentUser.uid:null;}
 function seat(){return room?room.seats.indexOf(uid()):-1;}
 function NP(){return room&&room.size?room.size:3;}
 function GM(){return room&&room.mode||"landlord";}
