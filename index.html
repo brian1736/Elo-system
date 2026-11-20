@@ -39,7 +39,7 @@ header p{margin:8px 0 0;color:var(--muted);max-width:60ch}
 section,details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
 h2{font-size:22px;font-weight:700;margin-bottom:12px}
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
-select,input[type=text],input[type=number],textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+select,input[type=text],input[type=number],input[type=email],input[type=password],textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
 select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
 .seg input{position:absolute;opacity:0;pointer-events:none}
@@ -54,6 +54,8 @@ button.link{border:0;background:none;padding:2px 6px;color:var(--muted);text-dec
 .preview{margin-top:14px;padding:12px;border-radius:8px;background:var(--bg);font-size:14px;min-height:64px}
 .bar{height:8px;border-radius:4px;background:var(--peas);overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:var(--land)}
+.timer-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:6px 0 12px}
+.timer-bar i{display:block;height:100%;background:var(--accent);width:100%;transition:width 0.5s linear}
 .row{display:flex;gap:8px}
 .row>*{flex:1;min-width:0}
 .row button{flex:0 0 auto}
@@ -148,8 +150,23 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 
   <section class="full" id="online" aria-labelledby="h-online">
     <h2 id="h-online">Play online</h2>
-    <p class="hint">Choose landlord, 2v2 teams (both teammates must discard every card to win), or free-for-all. Every table is public: open tables are listed below, and anyone on the site can join or watch and chat. Rated tables count towards the leaderboard when your name matches a leaderboard player; casual tables never do.</p>
-    <label for="oname">Your name</label><input type="text" id="oname" maxlength="24">
+    <p class="hint">Choose landlord, 2v2 teams, or free-for-all. Rated tables count towards the leaderboard when your name matches an existing leaderboard player. Secure your identity with an email and password below.</p>
+    
+    <div id="authBox" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:12px;">
+      <label>Player Account (Password Protection)</label>
+      <div class="row" style="margin-top:4px;">
+        <input type="email" id="uemail" placeholder="Email address" maxlength="40">
+        <input type="password" id="upass" placeholder="Password (6+ chars)" maxlength="40">
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button type="button" id="btnRegister">Register Account</button>
+        <button type="button" id="btnLogin">Log In</button>
+      </div>
+    </div>
+
+    <label for="oname">Your exact leaderboard name (Required for Rated)</label>
+    <input type="text" id="oname" maxlength="24" placeholder="Match your leaderboard name">
+
     <div id="olobby">
       <div class="row" style="margin-top:12px">
         <select id="ogamemode" aria-label="Game mode"><option value="landlord">Landlord</option><option value="teams">2v2 teams</option><option value="ffa">Free-for-all</option></select>
@@ -157,6 +174,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
         <select id="omode" aria-label="Rating"><option value="1">Rated</option><option value="0">Casual (unrated)</option></select>
       </div>
       <div class="row" style="margin-top:10px"><button class="primary" data-act="create" style="margin:0">Create a table</button></div>
+      <div class="row" style="margin-top:10px"><input type="text" id="ocode" maxlength="4" placeholder="Table code" aria-label="Table code"><button data-act="join">Join</button></div>
       <p class="hint" style="margin-top:16px"><b>Open tables</b></p>
       <div id="opublic"></div>
     </div>
@@ -177,7 +195,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 
   <details class="full admin">
     <summary>Import past games</summary>
-    <p class="hint">One game per line, oldest first: landlord, peasant, peasant, winner. Write L if the landlord won and P if the peasants won. New names are added as players automatically.</p>
+    <p class="hint">One game per line, oldest first: landlord, peasant, peasant, winner. Write L if the landlord won and P if the peasants won.</p>
     <textarea id="imp" aria-label="Past games" placeholder="Ava, Ben, Cleo, L&#10;Ben, Ava, Dan, P"></textarea>
     <button class="primary" id="impBtn">Import games</button>
     <p class="hint" id="impMsg" role="status"></p>
@@ -186,7 +204,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where, orderBy, limit, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 /* ====== PASTE YOUR FIREBASE DETAILS HERE (see setup steps) ====== */
@@ -202,11 +220,10 @@ const firebaseConfig = {
 
 const ADMIN_EMAIL="BrianDong22@gmail.com";
 const LOCK_GAMES=false;
-const DEL_MS=5*60*1000;          // a finished or empty table is deleted this long after
-const MAX_AGE_MS=12*3600*1000;   // safety net: any table older than this is deleted
-const PRESENCE_MS=75*1000;       // a watcher counts as present for this long after their last heartbeat
+const DEL_MS=5*60*1000;          
+const MAX_AGE_MS=12*3600*1000;   
+const PRESENCE_MS=75*1000;       
 
-/* offset4 is the landlord offset for 4-player games (1 landlord against 3 peasants) */
 const DEF={start:500,scale:400,offset:0,offset4:0,kNew:40,kMid:24,kEst:16,prov:20,est:100};
 const configured=!firebaseConfig.apiKey.startsWith("PASTE");
 let db=null,auth=null;
@@ -220,12 +237,6 @@ function pct(x){return Math.round(x*100)+"%";}
 function stamp(ms){return ms?new Date(ms).toLocaleString(undefined,{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";}
 function setStatus(t,bad){var s=$("status");s.textContent=t;s.style.color=bad?"var(--land)":"var(--muted)";}
 
-/* ---------- Ratings ----------
-   The landlord is rated against the average of the peasants, and moves by K x (result - expected).
-   The peasants share the opposite amount, but NOT equally: each peasant's share is weighted by how
-   surprising the result was for them personally, judged against the landlord on their own.
-   So when peasants win, the lower-rated peasant gets the bigger share; when they lose, the
-   higher-rated peasant loses the bigger share. With equal ratings the split is even. */
 function kf(p,c){return p.g<c.prov?c.kNew:(p.g<c.est?c.kMid:c.kEst);}
 function peas(g){return g.c?[g.a,g.b,g.c]:[g.a,g.b];}
 function calc(T,g,c){
@@ -235,7 +246,6 @@ function calc(T,g,c){
   var dl=kf(L,c)*(s-e);
   var w=P.map(function(p){var E=1/(1+Math.pow(10,(L.r+off-p.r)/c.scale));return s?E:1-E;});
   var tot=w.reduce(function(x,y){return x+y;},0);
-  // Distribute the landlord's exact rating change: the game is strictly zero-sum.
   return {e:e,dl:dl,dp:P.map(function(p,i){return -dl*(w[i]/tot);})};
 }
 function replay(){
@@ -379,12 +389,10 @@ $("impBtn").onclick=async function(){
   $("impBtn").disabled=false;
 };
 
-/* ---------- Online play ---------- */
 var CL=["3","4","5","6","7","8","9","10","J","Q","K","A","2"],SU=["\u2660","\u2665","\u2666","\u2663"];
 var room=null,code=null,hand=[],sel={},unsubs=[],acted="";
-var specUnsub=null,specMap={};           // spectators: uid -> cards, read from the public "view" collection
-var watchers=[],presTimer=null;           // who has the table open without a seat
-/* Card ids 0-53 are one deck, 54-107 the second deck (4-player tables). Values 0-12 = 3..2, 13 = small joker, 14 = big joker. */
+var specUnsub=null,specMap={};           
+var watchers=[],presTimer=null;           
 function cb(i){return i%54;}
 function cv(i){var b=cb(i);return b>51?b-39:b>>2;}
 function clab(i){var b=cb(i);return b>51?(b==52?"Jkr":"JKR"):CL[b>>2]+SU[b&3];}
@@ -404,7 +412,6 @@ function canon(n){return S.players.filter(function(p){return p.toLowerCase()===S
 function fill(n,v){var a=[];for(var i=0;i<n;i++)a.push(v);return a;}
 function nextActive(from,counts,N){for(var step=1;step<=N;step++){var i=(from+step)%N;if((counts[i]||0)>0)return i;}return from;}
 
-/* Locked rules. 2s are allowed in straights. */
 const HARD_RULES={single:true,pair:true,triple:true,t1:true,t2:true,st:true,ps:true,ap:true,apw1:true,apw2:true,f2s:true,f2p:true,bomb:true,rocket:true,twos:true,stMin:5,psMin:3};
 function R(){return HARD_RULES;}
 
@@ -418,7 +425,7 @@ function classify(ids,r){
   function run(a){for(var i=1;i<a.length;i++)if(a[i]!==a[i-1]+1)return false;return a.length>0&&a[a.length-1]<=lim;}
   if(!n)return null;
   if(n==2&&c[13]&&c[14])return{t:"rocket",n:2,v:99};
-  if(n==4&&c[13]===2&&c[14]===2)return{t:"rocket",n:4,v:100};   /* all four jokers (two-deck games) */
+  if(n==4&&c[13]===2&&c[14]===2)return{t:"rocket",n:4,v:100};   
   if(n==4&&ks.length==1)return{t:"bomb",n:4,v:vs[0]};
   if(n<=3&&ks.length==1)return{t:"x",n:n,v:vs[0]};
   if(n==4&&cnt(3).length==1)return{t:"t1",n:4,v:cnt(3)[0]};
@@ -466,9 +473,6 @@ function comboName(c){
   return({bomb:"Bomb",t1:"Triple + single",t2:"Triple + pair",st:"Straight",ps:"Pair straight",f2:"Four + two"})[t]||t;
 }
 
-/* Lowest legal play. Leading: the lowest single card. Following: the lowest
-   combination of the same type that beats the last play, then the lowest bomb,
-   then the rocket. Returns an array of card ids, or null if nothing can beat it. */
 function lowestPlay(cards,lastPlay){
   var by={},vals=[];
   cards.slice().sort(function(a,b){return cv(a)-cv(b)||a-b;}).forEach(function(c){var v=cv(c);if(!by[v]){by[v]=[];vals.push(v);}by[v].push(c);});
@@ -563,7 +567,6 @@ function watch(c){
     l.scrollTop=l.scrollHeight;
   },function(){}));
 
-  /* who has this table open */
   unsubs.push(onSnapshot(collection(db,"rooms",c,"presence"),function(snap){
     watchers=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{uid:d.id,name:x.name||"Guest",t:x.t&&x.t.toMillis?x.t.toMillis():Date.now()};});
     renderOnline();
@@ -572,7 +575,6 @@ function watch(c){
   setTimeout(beat,1500);
 }
 
-/* Non-seated viewers announce themselves every 20 seconds so others can see who is watching. */
 function myLabel(){var s=seat();return(room&&s>=0)?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");}
 function beat(){
   if(!db||!code||!uid()||!room)return;
@@ -581,7 +583,6 @@ function beat(){
 }
 window.addEventListener("pagehide",function(){if(db&&code&&uid())deleteDoc(pref(uid())).catch(function(){});});
 
-/* Spectators listen to one public "view" collection that mirrors every seat's hand. */
 function syncSpectate(){
   if(!room||!code)return;
   if(seat()<0&&!specUnsub){
@@ -606,8 +607,6 @@ function onRoom(){
   renderOnline();
 }
 
-/* 3 players: one deck, 17 cards each, 3 left over for the landlord.
-   4 players: two decks (108 cards), 25 cards each, 8 left over for the landlord. */
 async function deal(again){
   var N=NP(),mode=GM(),total=(N===4||N===6)?108:54,d=[],i,j,x;
   for(i=0;i<total;i++)d.push(i);
@@ -630,9 +629,7 @@ async function deal(again){
 async function resolve(){
   var bids=room.bids||fill(NP(),false),yes=[];
   bids.forEach(function(v,i){if(v===true)yes.push(i);});
-  // Nobody said yes: reshuffle everyone's hands and ask again
   if(!yes.length)return deal(true);
-  // One or more said yes: pick randomly among them
   var hs=yes[Math.floor(Math.random()*yes.length)];
   var k=(await getDoc(href("kitty"))).data().cards,ld=room.seats[hs],cards=(await getDoc(href(ld))).data().cards.concat(k),counts=room.counts.slice();
   counts[hs]=cards.length;
@@ -643,17 +640,15 @@ async function resolve(){
   await b.commit();
 }
 
-/* Rated tables only. Peasants are listed in seat order after the landlord. */
 function record(){
   if(!rated()||GM()!=="landlord")return;
   var N=NP(),nm=room.names.map(canon);
-  if(nm.some(function(x){return !x;})){omsg("Not added to the leaderboard: every name must match a leaderboard player.");return;}
+  if(nm.some(function(x){return !x;})){omsg("Not added to the leaderboard: every name must match an exact leaderboard player.");return;}
   var L=room.landlord,g={l:nm[L],a:nm[(L+1)%N],b:nm[(L+2)%N],w:room.winner===L,t:serverTimestamp()};
   if(N===4)g.c=nm[(L+3)%N];
   setDoc(doc(db,"games","online_"+code+"_"+room.gameNo),g).catch(function(){});
 }
 
-/* Everyone answers yes or no at the same time; answers stay hidden until all are in. */
 function bid(v){
   var s=seat();if(s<0)return;
   var rr=rref();
@@ -686,13 +681,11 @@ async function play(auto){
       var win=false,winner=s,winnerName=r.names[s];
       if(mode==="teams"){
         var team=(r.teams||[])[s];
-        // Both partners must have emptied their hands.
         win=(r.seats||[]).every(function(_,i){return r.teams[i]!==team||counts[i]===0;});
         if(win)winnerName=r.names.filter(function(n,i){return r.teams[i]===team;}).join(" + ");
       }else win=left.length===0;
       var isR=cl.t==="rocket",newLast={seat:s,cards:ids,t:cl.t,n:cl.n,v:cl.v};
       var next=nextActive(s,counts,N),passes=isR?N-1:0,lastUp=newLast;
-      // If no opponent can beat this combo, return the lead immediately.
       {
         var canBeat=false;
         for(var i=0;i<N;i++)if(i!==s&&counts[i]>0){var od=await tx.get(href(r.seats[i]));var oh=od.exists()?(od.data().cards||[]):[];if(lowestPlay(oh,newLast)){canBeat=true;break;}}
@@ -727,12 +720,24 @@ async function pass(auto){
 }
 
 function myName(){
-  var n=$("oname").value.trim();
-  if(!n||n.length>24){omsg("Enter your name (up to 24 characters).");return null;}
-  try{localStorage.setItem("ll-name",n);}catch(e){}
+  var raw=$("oname").value.trim();
+  if(!raw||raw.length>24){omsg("Enter your name (up to 24 characters).");return null;}
+  
+  var isRatedGame = $("omode").value !== "0" && $("ogamemode").value === "landlord";
+  if(isRatedGame){
+    var matched = canon(raw);
+    if(!matched){
+      omsg("For Rated tables, your name must exactly match a player already listed on the leaderboard!");
+      return null;
+    }
+    raw = matched;
+  }
+
+  try{localStorage.setItem("ll-name",raw);}catch(e){}
   if(!uid()){omsg("Still connecting. Try again in a moment.");return null;}
-  return n;
+  return raw;
 }
+
 async function createRoom(){
   var n=myName();if(!n)return;
   var mode=$("ogamemode").value,N=+$("osize").value;
@@ -775,7 +780,7 @@ async function joinRoom(c){
     if(joined){watch(c);omsg("");}
   }catch(e){omsg(e.message);}
 }
-/* Leaving a table that isn't mid-game frees the seat. If nobody is left, the table is deleted in 5 minutes. */
+
 async function leaveRoom(){
   var c=code,me=uid(),wasSeated=seat()>=0;
   unsubs.forEach(function(u){u();});unsubs=[];specUnsub=null;specMap={};watchers=[];
@@ -809,7 +814,6 @@ async function leaveRoom(){
   }catch(e){}
 }
 
-/* ---------- Public table list ---------- */
 var pubRooms=[],lobbyUnsub=null;
 function tmOf(r){return r.t&&r.t.toMillis?r.t.toMillis():Date.now();}
 function startLobby(){
@@ -820,7 +824,7 @@ function startLobby(){
     renderPublic();
   },function(e){
     var b=$("opublic");if(b)b.textContent="Can’t load tables: "+e.message;
-    lobbyUnsub=null;setTimeout(startLobby,5000); // retries, so publishing the rules fixes it without a refresh
+    lobbyUnsub=null;setTimeout(startLobby,5000);
   });
 }
 function renderPublic(){
@@ -846,7 +850,6 @@ function watchRoom(c){
   watch(c);omsg("");
 }
 
-/* ---------- Table cleanup ---------- */
 var sweeping=false,sweepTimer=null;
 async function deleteRoom(c,r){
   var kill=function(ref){return deleteDoc(ref).catch(function(){});};
@@ -872,9 +875,7 @@ async function sweep(){
   sweeping=true;
   try{
     var now=Date.now();
-    // finished or empty tables whose 5 minutes are up (re-checked right before deleting)
     await sweepQuery(query(collection(db,"rooms"),where("deleteAt","<=",new Date(now))),function(r){return r.deleteAt&&r.deleteAt.toMillis()<=Date.now();});
-    // abandoned tables nobody ever left or finished
     await sweepQuery(query(collection(db,"rooms"),where("t","<",new Date(now-MAX_AGE_MS))),function(r){return true;});
   }catch(e){}
   sweeping=false;
@@ -894,15 +895,22 @@ function startTurnClock(){
   turnTimer=setInterval(function(){
     if(!room||room.phase!=="play"||!rated()||seat()!==room.turn)return;
     var started=Number(room.turnAt||Date.now());
-    if(Date.now()-started>=30000){
+    var elapsed=Date.now()-started;
+    
+    var tBar = document.getElementById("turnProgress");
+    if(tBar){
+      var pctLeft = Math.max(0, 100 - (elapsed / 30000) * 100);
+      tBar.style.width = pctLeft + "%";
+    }
+
+    if(elapsed>=30000){
       var key=code+":"+room.gameNo+":"+room.turn+":"+started;
       if(lastAutoKey===key)return;lastAutoKey=key;
       var s=seat(),last=room.last&&room.last.seat!==s?room.last:null;
       if(last)pass(true);
       else {var low=lowestPlay(hand,null);if(low){sel={};low.forEach(function(c){sel[c]=1;});play(true);}}
     }
-    renderOnline();
-  },1000);
+  },500);
 }
 
 function renderOnline(){
@@ -924,7 +932,6 @@ function renderOnline(){
   }
   h+="</div>";
 
-  /* who is watching (no leaderboard name needed) */
   var now=Date.now(),seen={},wl=watchers.filter(function(x){
     if(room.seats.indexOf(x.uid)>=0||now-x.t>PRESENCE_MS||seen[x.uid])return false;
     seen[x.uid]=1;return true;
@@ -959,17 +966,20 @@ function renderOnline(){
     }
     if(GM()==="landlord")h+="<p>Landlord\u2019s extra cards: "+room.kitty.map(function(c){return cardH(c);}).join("")+"</p>";
 
-    /* The last combo stays on screen until someone plays a new one, even after everyone passes. */
     var sh=room.shown;
     if(sh){
-      h+="<p>Last played by <b>"+nm(sh.seat)+"</b> \u2014 "+esc(sh.label)+(room.last?"":" <span class=\"hint\">(no one could beat it, "+nm(room.turn)+" leads)</span>")+'</p><div class="hand">'+sh.cards.slice().sort(function(a,b){return cv(a)-cv(b)||a-b;}).map(function(c){return cardH(c);}).join("")+"</div>";
+      h+="<p>Last played by <b>"+nm(sh.seat)+"</b> \u2014 "+esc(sh.label)+(room.last?"":" <span class=\"hint\">(no one could beat it, "+nm(room.turn)+" leads)</span>")+'</p><div class="hand">'+sh.cards.slice().sort(function(a,b){return cv(a)-cv(b)||b-a;}).map(function(c){return cardH(c);}).join("")+"</div>";
     }else{
       h+="<p>Nothing played yet. "+nm(room.turn)+" leads.</p>";
     }
 
     if(mine){
       var secondsLeft=Math.max(0,30-Math.floor((Date.now()-Number(room.turnAt||Date.now()))/1000));
-      h+='<p><b>Your turn</b>'+(rated()?' · auto action in '+secondsLeft+'s':'')+'</p><div class="actions">';
+      h+='<p><b>Your turn</b>'+(rated()?' · auto action in '+secondsLeft+'s':'')+'</p>';
+      if(rated()){
+        h+='<div class="timer-bar"><i id="turnProgress"></i></div>';
+      }
+      h+='<div class="actions">';
       h+='<button class="primary" data-act="play">Play selected</button>';
       h+='<button data-act="lowest">Lowest play</button>';
       if(room.last&&room.last.seat!==s)h+='<button data-act="pass">Pass</button>';
@@ -979,7 +989,6 @@ function renderOnline(){
     }
   }
 
-  // Spectators see every hand
   if(s<0&&ph!=="lobby"){
     h+='<p class="hint"><b>Spectating: all hands</b></p>';
     for(i=0;i<N;i++){
@@ -1012,9 +1021,31 @@ $("online").onclick=function(e){
   else if(a==="bid")bid(t.dataset.v==="true");else if(a==="play")play();else if(a==="lowest")selectLowestPlay();else if(a==="pass")pass();
 };
 
+document.getElementById("btnRegister").onclick = async function() {
+  var email = $("uemail").value.trim();
+  var pass = $("upass").value.trim();
+  var name = $("oname").value.trim();
+  if(!email || !pass || !name) { omsg("Enter email, password, and leaderboard name."); return; }
+  try {
+    await createUserWithEmailAndPassword(auth, email, pass);
+    localStorage.setItem("ll-name", name);
+    omsg("Account registered and logged in!");
+  } catch (e) { omsg("Registration failed: " + e.message); }
+};
+
+document.getElementById("btnLogin").onclick = async function() {
+  var email = $("uemail").value.trim();
+  var pass = $("upass").value.trim();
+  if(!email || !pass) { omsg("Enter email and password."); return; }
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    omsg("Logged in successfully!");
+  } catch (e) { omsg("Login failed: " + e.message); }
+};
+
 function shareLink(){
   var u=location.href.split("#")[0]+"#"+code;
-  try{navigator.clipboard.writeText(u).then(function(){omsg("Link copied. Anyone with it can watch this table.");},function(){omsg(u);});}catch(e){omsg(u);}
+  try{navigator.clipboard.writeText(u).then(function(){omsg("Link copied.");},function(){omsg(u);});}catch(e){omsg(u);}
 }
 
 $("ochatForm").onsubmit=function(e){
@@ -1066,7 +1097,7 @@ if(configured){
     refresh();
   },function(e){setStatus("Couldn\u2019t load games: "+e.message,true);});
 }else{
-  setStatus("The database isn\u2019t connected yet. Follow the setup steps, then paste your Firebase details at the top of the script in this file.",true);
+  setStatus("The database isn\u2019t connected yet. Follow setup steps and paste Firebase details.",true);
 }
 refresh();
 </script>
