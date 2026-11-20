@@ -96,6 +96,8 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 .mv.cur b{color:inherit}
 .rpnav{display:flex;gap:6px;align-items:center;margin:10px 0;flex-wrap:wrap}
 .rpnav button{padding:8px 14px}
+.tm{margin-left:6px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.tm.low{color:var(--land);font-weight:700}
 .x{color:var(--muted);border:0;background:none;padding:0 4px;cursor:pointer}
 .pub{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
 .pubinfo{min-width:0;overflow-wrap:anywhere}
@@ -234,20 +236,22 @@ function stamp(ms){return ms?new Date(ms).toLocaleString(undefined,{day:"numeric
 function setStatus(t,bad){var s=$("status");s.textContent=t;s.style.color=bad?"var(--land)":"var(--muted)";}
 
 /* ---------- Ratings ----------
-   The landlord is rated against the average of the peasants, and moves by K x (result - expected).
-   The peasants share the opposite amount, but NOT equally: each peasant's share is weighted by how
-   surprising the result was for them personally, judged against the landlord on their own.
-   So when peasants win, the lower-rated peasant gets the bigger share; when they lose, the
-   higher-rated peasant loses the bigger share. With equal ratings the split is even. */
+   Zero-sum: whatever the landlord gains, the peasants lose in total, and vice versa.
+   The landlord is rated against the average of the peasants. The size of the swing is
+   K x (result - expected), where K is the average K-factor of everyone at the table.
+   The peasants' side of the swing is split by how surprising the result was for each peasant
+   against the landlord on their own: if the peasants win, the lower-rated peasant gains more;
+   if they lose, the lower-rated peasant loses less. With equal ratings the split is even. */
 function kf(p,c){return p.g<c.prov?c.kNew:(p.g<c.est?c.kMid:c.kEst);}
 function peas(g){return g.c?[g.a,g.b,g.c]:[g.a,g.b];}
 function calc(T,g,c){
   var L=T[g.l],P=peas(g).map(function(n){return T[n];}),s=g.w?1:0,off=g.c?c.offset4:c.offset;
   var avg=P.reduce(function(x,p){return x+p.r;},0)/P.length;
   var e=1/(1+Math.pow(10,(avg-(L.r+off))/c.scale));
+  var K=(kf(L,c)+P.reduce(function(x,p){return x+kf(p,c);},0))/(P.length+1);
   var w=P.map(function(p){var E=1/(1+Math.pow(10,(L.r+off-p.r)/c.scale));return s?E:1-E;});
-  var tot=w.reduce(function(x,y){return x+y;},0);
-  return {e:e,dl:kf(L,c)*(s-e),dp:P.map(function(p,i){return kf(p,c)*(w[i]/tot)*(e-s);})};
+  var tot=w.reduce(function(x,y){return x+y;},0),pool=K*(s-e);
+  return {e:e,dl:pool,dp:w.map(function(x){return-pool*x/tot;})};
 }
 function replay(){
   var T={},c=S.cfg;
@@ -576,7 +580,8 @@ function watch(c){
     watchers=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{uid:d.id,name:x.name||"Guest",t:x.t&&x.t.toMillis?x.t.toMillis():Date.now()};});
     renderOnline();
   },function(){}));
-  presTimer=setInterval(function(){beat();renderOnline();},20000);
+  watchStart=Date.now();
+  presTimer=setInterval(function(){beat();renderOnline();},15000);
   setTimeout(beat,1500);
 }
 
@@ -584,10 +589,9 @@ function watch(c){
 function myLabel(){var s=seat();return(room&&s>=0)?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");}
 function beat(){
   if(!db||!code||!uid()||!room)return;
-  if(seat()>=0){deleteDoc(pref(uid())).catch(function(){});return;}
   setDoc(pref(uid()),{name:myLabel(),t:serverTimestamp()}).catch(function(){});
 }
-window.addEventListener("pagehide",function(){if(db&&code&&uid())deleteDoc(pref(uid())).catch(function(){});});
+window.addEventListener("pagehide",function(){if(db&&code&&uid()&&seat()<0)deleteDoc(pref(uid())).catch(function(){});});
 
 /* Spectators listen to one public "view" collection that mirrors every seat's hand. */
 function syncSpectate(){
@@ -604,6 +608,7 @@ function syncSpectate(){
 }
 
 function onRoom(){
+  var k=tKey();if(k!==turnKey){turnKey=k;turnSeen=Date.now();}
   if(room){
     var key=code+":"+room.gameNo+":"+room.phase;
     if(room.phase==="resolve"&&room.host===uid()&&acted!==key){acted=key;resolve().catch(function(e){omsg(e.message);});}
@@ -738,9 +743,44 @@ async function joinRoom(c){
     watch(c);omsg("");
   }catch(e){omsg(e.message);}
 }
-/* Leaving a table that isn't mid-game frees the seat. If nobody is left, the table is deleted in 5 minutes. */
+/* Resets a game in progress back to the waiting room. No result is recorded, so nothing changes in
+   anyone's rating. The players listed in "gone" lose their seat; everyone else keeps theirs. */
+async function resetGame(c,why,gone){
+  var rr=doc(db,"rooms",c);
+  try{
+    await runTransaction(db,async function(tx){
+      var d=await tx.get(rr);if(!d.exists())return;
+      var r=d.data();
+      if(["bid","resolve","play"].indexOf(r.phase)<0)return;
+      var N=r.size||3,seats=r.seats.slice(),names=r.names.slice();
+      seats.forEach(function(u,i){if(gone.indexOf(u)>=0){seats[i]="";names[i]="";}});
+      var rest=seats.filter(Boolean);
+      var up={phase:"lobby",seats:seats,names:names,bids:fill(N,null),counts:fill(N,0),last:null,shown:null,moves:[],passes:0,landlord:-1,kitty:[],winner:-1,winnerName:"",turn:-1,note:why,deleteAt:rest.length?null:delAt()};
+      if(rest.length&&seats.indexOf(r.host)<0)up.host=rest[0];
+      tx.update(rr,up);
+    });
+  }catch(e){}
+}
+/* A seated player whose browser has stopped sending heartbeats has left. */
+function checkAbsent(){
+  if(!room||!code||seat()<0||resetting)return;
+  if(["bid","resolve","play"].indexOf(room.phase)<0)return;
+  if(Date.now()-watchStart<30000)return;
+  var now=Date.now(),pm={},gone=[],who=[];
+  watchers.forEach(function(x){pm[x.uid]=x.t;});
+  room.seats.forEach(function(u,i){
+    if(u&&u!==uid()&&(!pm[u]||now-pm[u]>45000)){gone.push(u);who.push(room.names[i]);}
+  });
+  if(!gone.length)return;
+  resetting=true;
+  resetGame(code,who.join(", ")+(who.length>1?" left":" left")+", so the game was reset. No ratings changed.",gone).then(function(){resetting=false;});
+}
+
+/* Leaving a table that isn't mid-game frees the seat. Leaving mid-game resets the game for everyone
+   with no rating changes. If nobody is left, the table is deleted in 5 minutes. */
 async function leaveRoom(){
-  var c=code,me=uid(),wasSeated=seat()>=0;
+  var c=code,me=uid(),wasSeated=seat()>=0,mid=!!room&&["bid","resolve","play"].indexOf(room.phase)>=0,myN=wasSeated?room.names[seat()]:"";
+  if(wasSeated&&mid&&!confirm("Leaving now resets the game for everyone. No ratings change. Leave anyway?"))return;
   unsubs.forEach(function(u){u();});unsubs=[];specUnsub=null;specMap={};watchers=[];
   if(presTimer){clearInterval(presTimer);presTimer=null;}
   if(c&&me)deleteDoc(doc(db,"rooms",c,"presence",me)).catch(function(){});
@@ -748,6 +788,12 @@ async function leaveRoom(){
   history.replaceState(null,"",location.pathname+location.search);
   renderOnline();omsg("");
   if(!c||!me||!wasSeated)return;
+  if(mid){
+    await resetGame(c,myN+" left, so the game was reset. No ratings changed.",[me]);
+    deleteDoc(doc(db,"rooms",c,"hands",me)).catch(function(){});
+    deleteDoc(doc(db,"rooms",c,"view",me)).catch(function(){});
+    return;
+  }
   try{
     var rr=doc(db,"rooms",c),freed=false;
     await runTransaction(db,async function(tx){
@@ -803,6 +849,43 @@ function watchRoom(c){
   if(!uid()){omsg("Still connecting. Try again in a moment.");return;}
   watch(c);omsg("");
 }
+
+/* ---------- Turn timer (rated tables) ----------
+   Every browser starts its own 30-second countdown when it sees the turn change, so nothing depends
+   on clocks agreeing. The player whose turn it is acts for themselves when their countdown ends:
+   leading plays the lowest card, otherwise they pass (and an unanswered landlord question becomes "no"). */
+var TURN_MS=30000,turnKey="",turnSeen=0,autoKey="",watchStart=0,resetting=false;
+function tKey(){
+  if(!room)return"";
+  if(room.phase==="bid")return code+":"+room.gameNo+":bid";
+  if(room.phase==="play")return code+":"+room.gameNo+":p:"+(room.moves?room.moves.length:0);
+  return"";
+}
+function timed(){return!!room&&room.rated!==false&&(room.phase==="bid"||room.phase==="play");}
+function updateTimers(){
+  var on=timed(),left=on?Math.max(0,TURN_MS-(Date.now()-turnSeen)):0;
+  document.querySelectorAll(".tm").forEach(function(e){
+    var i=+e.dataset.s,show=on&&(room.phase==="play"?room.turn===i:(!!room.names[i]&&room.bids&&room.bids[i]===null));
+    e.textContent=show?"\u23f1 "+Math.ceil(left/1000)+"s":"";
+    e.className="tm"+(show&&left<=10000?" low":"");
+  });
+  return left;
+}
+function autoAct(){
+  var s=seat();
+  if(room.phase==="bid"){if(s>=0&&room.bids[s]===null){omsg("Time ran out, so you said no to being landlord.");bid(false);}return;}
+  if(s<0||s!==room.turn)return;
+  if(room.last&&room.last.seat!==s){omsg("Time ran out, so you passed.");pass();return;}
+  var pick=lowestPlay(hand,null);if(!pick)return;
+  sel={};pick.forEach(function(c){sel[c]=1;});
+  omsg("Time ran out, so your lowest card was played.");play();
+}
+function tick(){
+  var left=updateTimers();
+  if(timed()&&left===0&&autoKey!==turnKey){autoKey=turnKey;autoAct();}
+  checkAbsent();
+}
+setInterval(tick,1000);
 
 /* ---------- Game history (move-by-move replays) ----------
    When an online game ends, the winner's browser saves it: the starting hands (rebuilt from what is
@@ -950,11 +1033,12 @@ function renderOnline(){
       pending=room.bids[i]===null;
       bidStatus=pending?"deciding\u2026":"ready \u2713";
     }
-    h+='<div class="seat'+((room.turn===i||(ph==="bid"&&n&&pending))?" on":"")+'"><b>'+(n?esc(n):"Empty seat")+"</b>"+(cn&&T[cn]&&room.rated!==false?" \u00b7 "+Math.round(T[cn].r):"")+"<br>"+
+    h+='<div class="seat'+((room.turn===i||(ph==="bid"&&n&&pending))?" on":"")+'"><b>'+(n?esc(n):"Empty seat")+"</b>"+'<span class="tm" data-s="'+i+'"></span>'+(cn&&T[cn]&&room.rated!==false?" \u00b7 "+Math.round(T[cn].r):"")+"<br>"+
       (room.landlord===i&&(ph==="play"||ph==="done")?'<span class="tag l">Landlord</span> ':"")+(ph==="play"||ph==="done"?room.counts[i]+" cards":"")+bidStatus+"</div>";
   }
   h+="</div>";
 
+  if(room.rated!==false&&(ph==="bid"||ph==="play"))h+='<p class="hint">Rated: 30 seconds per turn. If time runs out, the lowest card is played when you lead, otherwise you pass.</p>';
   /* who is watching (no leaderboard name needed) */
   var now=Date.now(),seen={},wl=watchers.filter(function(x){
     if(room.seats.indexOf(x.uid)>=0||now-x.t>PRESENCE_MS||seen[x.uid])return false;
@@ -964,6 +1048,7 @@ function renderOnline(){
 
   var full=room.seats.indexOf("")<0,mine=s===room.turn,nm=function(k){return esc(room.names[k]);};
   if(ph==="lobby"||ph==="done"){
+    if(room.note&&ph==="lobby")h+='<p class="hint"><b>'+esc(room.note)+"</b></p>";
     if(ph==="done"){
       var wn=esc(room.winnerName||room.names[room.winner]||"Someone");
       h+="<p><b>"+wn+" wins \u2014 "+(room.winner===room.landlord?"the landlord wins.":"the peasants win.")+"</b>"+(room.rated===false?" (casual, not rated)":"")+"</p>";
@@ -1019,6 +1104,7 @@ function renderOnline(){
   if(s>=0&&hand.length)h+='<p class="hint">Your hand</p><div class="hand">'+sortedH(hand,true)+"</div>";
 
   $("otable").innerHTML=h;
+  updateTimers();
 }
 
 $("online").onclick=function(e){
