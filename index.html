@@ -129,6 +129,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
         <label for="selL">Landlord</label><select id="selL"></select>
         <label for="selA">Peasant</label><select id="selA"></select>
         <label for="selB">Peasant</label><select id="selB"></select>
+        <label for="selC">Peasant (4-player games only)</label><select id="selC"></select>
         <label>Winner</label>
         <div class="seg">
           <input type="radio" name="w" id="wl" value="1" checked><label class="l" for="wl">Landlord won</label>
@@ -577,21 +578,15 @@ function watch(c){
   /* who has this table open */
   unsubs.push(onSnapshot(collection(db,"rooms",c,"presence"),function(snap){
     watchers=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{uid:d.id,name:x.name||"Guest",t:x.t&&x.t.toMillis?x.t.toMillis():Date.now()};});
-    refreshWatchers();
+    renderOnline();
   },function(){}));
   watchStart=Date.now();
-  presTimer=setInterval(function(){beat();refreshWatchers();},15000);
+  presTimer=setInterval(function(){beat();renderOnline();},15000);
   setTimeout(beat,1500);
 }
 
 /* Non-seated viewers announce themselves every 20 seconds so others can see who is watching. */
 function myLabel(){var s=seat();return(room&&s>=0)?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");}
-var wSig="";
-function watchSig(){
-  var now=Date.now();
-  return watchers.filter(function(x){return room&&room.seats.indexOf(x.uid)<0&&now-x.t<=PRESENCE_MS;}).map(function(x){return x.uid+":"+x.name;}).sort().join("|");
-}
-function refreshWatchers(){var sg=watchSig();if(sg!==wSig){wSig=sg;renderOnline();}}
 function beat(){
   if(!db||!code||!uid()||!room)return;
   setDoc(pref(uid()),{name:myLabel(),t:serverTimestamp()}).catch(function(){});
@@ -681,11 +676,10 @@ function bid(v){
 
 function play(){
   var N=NP(),s=seat(),ids=hand.filter(function(c){return sel[c];}),cl=classify(ids,R());
-  if(!ids.length){omsg("Tap the cards you want to play first.");return;}
-  if(!cl){omsg(ids.length+" card"+(ids.length===1?"":"s")+" selected: that isn\u2019t a valid combination.");return;}
+  if(!cl){omsg("That isn\u2019t a valid combination.");return;}
   if(!allowed(cl,R())){omsg("That combination isn\u2019t allowed at this table.");return;}
   var last=room.last&&room.last.seat!==s?room.last:null;
-  if(!beats(last,cl)){omsg("That "+comboName(cl).toLowerCase()+" doesn\u2019t beat the last play ("+(room.shown?room.shown.label:"previous play")+"). Play the same kind of combination with higher cards, a bomb, or the rocket.");return;}
+  if(!beats(last,cl)){omsg("That doesn\u2019t beat the last play.");return;}
 
   var left=hand.filter(function(c){return !sel[c];}),counts=room.counts.slice();counts[s]=left.length;
 
@@ -698,12 +692,7 @@ function play(){
   var b=writeBatch(db);
   b.set(href(uid()),{cards:left});
   b.set(vref(uid()),{cards:left});
-  b.update(rref(),up);
-  b.commit().catch(function(e){
-    ids.forEach(function(c){sel[c]=1;});
-    omsg("Couldn\u2019t play that: "+e.message);
-    renderOnline();
-  });
+  b.commit().then(function(){return updateDoc(rref(),up);}).catch(function(e){omsg(e.message);});
 }
 
 function selectLowestPlay(){
