@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fight the Landlord Elo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%83%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;700&display=swap">
+<style>
+:root{
+  --bg:#eef3f0; --surface:#ffffff; --ink:#15231f; --muted:#5b6b65; --line:#cfdad4;
+  --land:#b3261e; --land-soft:#f7e3e0; --peas:#8a5a0c; --peas-soft:#f6ecd5; --accent:#1f5c4d; --accent-ink:#ffffff;
+  color-scheme: light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1f1b; --surface:#172b26; --ink:#e6efe9; --muted:#9db0a8; --line:#294039;
+    --land:#ee7466; --land-soft:#3a2420; --peas:#e0aa4c; --peas-soft:#3a3018; --accent:#6cc3a8; --accent-ink:#0f1f1b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1f1b; --surface:#172b26; --ink:#e6efe9; --muted:#9db0a8; --line:#294039;
+  --land:#ee7466; --land-soft:#3a2420; --peas:#e0aa4c; --peas-soft:#3a3018; --accent:#6cc3a8; --accent-ink:#0f1f1b;
+  color-scheme: dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2{font-family:"Zilla Slab",Georgia,serif;margin:0}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 48px}
+header{margin-bottom:24px}
+h1{font-size:clamp(28px,6vw,44px);font-weight:700;line-height:1.1}
+header p{margin:8px 0 0;color:var(--muted);max-width:60ch}
+.grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:860px){.grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:start}}
+section,details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+h2{font-size:22px;font-weight:700;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+select,input[type=text],input[type=number],textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{margin:0;padding:10px;text-align:center;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--ink);font-size:14px}
+.seg input:checked + label.l{background:var(--land-soft);border-color:var(--land);color:var(--land);font-weight:600}
+.seg input:checked + label.p{background:var(--peas-soft);border-color:var(--peas);color:var(--peas);font-weight:600}
+.seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;width:100%;margin-top:14px}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.link{border:0;background:none;padding:2px 6px;color:var(--muted);text-decoration:underline}
+.preview{margin-top:14px;padding:12px;border-radius:8px;background:var(--bg);font-size:14px;min-height:64px}
+.bar{height:8px;border-radius:4px;background:var(--peas);overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--land)}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.row button{flex:0 0 auto}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.actions button,.actions button.primary{flex:1 1 96px;min-width:0;width:auto;margin:0;padding:11px 8px;white-space:normal;line-height:1.2}
+.tablewrap{overflow-x:auto;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:13px}
+td.num,th.num{text-align:right}
+td.rating{font-family:"Zilla Slab",Georgia,serif;font-size:20px;font-weight:700}
+.empty{color:var(--muted);padding:12px 0}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.hist .hint{margin:2px 0 0}
+.tag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:10px}
+.tag.l{background:var(--land-soft);color:var(--land)} .tag.p{background:var(--peas-soft);color:var(--peas)}
+.full{margin-top:16px}
+details summary{cursor:pointer;font-family:"Zilla Slab",Georgia,serif;font-size:20px;font-weight:700}
+.hint{color:var(--muted);font-size:13px;margin:8px 0 0}
+textarea{min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace}
+.admin{display:none}
+body.unlocked .admin{display:block}
+body.unlocked .admin.row{display:flex}
+body.unlocked button.admin{display:inline-block}
+body.unlocked #lockForm{display:none}
+.seats{display:grid;gap:8px;margin-bottom:12px}
+.seat{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;overflow-wrap:anywhere}
+.seat.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.hand{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 12px;padding-top:8px}
+.card{min-width:42px;padding:8px 6px;font-size:14px;font-weight:600;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);display:inline-block;text-align:center;line-height:1.2}
+.card.red{color:var(--land)}
+button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.chatlog{height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:4px 0 8px;font-size:14px;background:var(--bg)}
+.chatlog p{margin:2px 0;overflow-wrap:anywhere}
+.mvs{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;max-height:220px;overflow-y:auto}
+.mv{padding:4px 8px;font-size:13px;border-radius:6px;text-align:left}
+.mv.ll b{color:var(--land)}
+.mv.cur{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.mv.cur b{color:inherit}
+.rpnav{display:flex;gap:6px;align-items:center;margin:10px 0;flex-wrap:wrap}
+.rpnav button{padding:8px 14px}
+.tm{margin-left:6px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.tm.low{color:var(--land);font-weight:700}
+.x{color:var(--muted);border:0;background:none;padding:0 4px;cursor:pointer}
+.pub{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.pubinfo{min-width:0;overflow-wrap:anywhere}
+.pubinfo .hint{margin:0}
+.pubacts{display:flex;gap:6px;flex:0 0 auto}
+.pubacts button{padding:8px 12px}
+@media(max-width:520px){
+  .wrap{padding:16px 10px 40px}
+  section,details{padding:14px}
+  .seats{gap:6px}
+  .seat{padding:6px;font-size:12px}
+  .hand{gap:3px}
+  .card{min-width:30px;padding:7px 3px;font-size:13px}
+  .actions button,.actions button.primary{flex-basis:80px;font-size:14px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Fight the Landlord ratings</h1>
+    <p class="hint" id="status" role="status"></p>
+  </header>
+
+  <div class="grid">
+    <section aria-labelledby="h-log">
+      <h2 id="h-log">Record a physical game</h2>
+      <div id="logForm">
+        <label for="selL">Landlord</label><select id="selL"></select>
+        <label for="selA">Peasant</label><select id="selA"></select>
+        <label for="selB">Peasant</label><select id="selB"></select>
+        <label for="selC">Peasant (4-player games only)</label><select id="selC"></select>
+        <label>Winner</label>
+        <div class="seg">
+          <input type="radio" name="w" id="wl" value="1" checked><label class="l" for="wl">Landlord won</label>
+          <input type="radio" name="w" id="wp" value="0"><label class="p" for="wp">Peasants won</label>
+        </div>
+        <div class="preview" id="preview" aria-live="polite"></div>
+        <button class="primary" id="record">Record game</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-board">
+      <h2 id="h-board">Leaderboard</h2>
+      <form class="row" id="lockForm" style="max-width:420px;margin-bottom:10px">
+        <input type="password" id="pass" placeholder="Passcode to remove players or undo games" autocomplete="current-password" aria-label="Passcode">
+        <button type="submit">Unlock</button>
+      </form>
+      <p class="hint admin" id="unlockedNote">Manage mode is on. <button class="link" id="lockBtn" type="button">Lock</button></p>
+      <form class="row" id="addForm">
+        <input type="text" id="newName" placeholder="Player name" maxlength="24" aria-label="New player name">
+        <button type="submit">Add player</button>
+      </form>
+      <div class="tablewrap" id="board"></div>
+    </section>
+  </div>
+
+  <section class="full" id="online" aria-labelledby="h-online">
+    <h2 id="h-online">Play online</h2>
+    <p class="hint">Three or four players per table. Every table is public: open tables are listed below, and anyone on the site can join or watch and chat. Rated tables count towards the leaderboard when your name matches a leaderboard player; casual tables never do.</p>
+    <label for="oname">Your name</label><input type="text" id="oname" maxlength="24">
+    <div id="olobby">
+      <div class="row" style="margin-top:12px">
+        <select id="osize" aria-label="Number of players"><option value="3">3 players</option><option value="4">4 players (2 decks)</option></select>
+        <select id="omode" aria-label="Game mode"><option value="1">Rated</option><option value="0">Casual (unrated)</option></select>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="primary" data-act="create" style="margin:0">Create a table</button></div>
+      <p class="hint" style="margin-top:16px"><b>Open tables</b></p>
+      <div id="opublic"></div>
+    </div>
+    <div id="otable" hidden></div>
+    <div id="ochatbox" hidden>
+      <p class="hint">Table chat</p>
+      <div class="chatlog" id="olog" aria-live="polite"></div>
+      <form class="row" id="ochatForm"><input type="text" id="otext" maxlength="200" placeholder="Say something" aria-label="Chat message"><button type="submit">Send</button></form>
+    </div>
+    <p class="hint" id="omsg" role="status"></p>
+  </section>
+
+  <section class="full" aria-labelledby="h-hist">
+    <h2 id="h-hist">Recent games</h2>
+    <ul class="hist" id="hist"></ul>
+    <button class="link admin" id="undo">Undo last game</button>
+  </section>
+
+  <section class="full" id="hsec" aria-labelledby="h-rp">
+    <h2 id="h-rp">Game history</h2>
+    <p class="hint">Every online game is saved move by move. Open one to step through it, with every hand visible.</p>
+    <div id="rplist"></div>
+    <div id="rpview" hidden></div>
+  </section>
+
+  <details class="full admin">
+    <summary>Import past games</summary>
+    <p class="hint">One game per line, oldest first: landlord, peasant, peasant, winner. Write L if the landlord won and P if the peasants won. New names are added as players automatically.</p>
+    <textarea id="imp" aria-label="Past games" placeholder="Ava, Ben, Cleo, L&#10;Ben, Ava, Dan, P"></textarea>
+    <button class="primary" id="impBtn">Import games</button>
+    <p class="hint" id="impMsg" role="status"></p>
+  </details>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, arrayUnion, query, where, orderBy, limit, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+/* ====== PASTE YOUR FIREBASE DETAILS HERE (see setup steps) ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyB_Run2TYJi55vID0qQdZKfcDJZhXiDcj4",
+  authDomain: "elo-system-b34ae.firebaseapp.com",
+  projectId: "elo-system-b34ae",
+  storageBucket: "elo-system-b34ae.firebasestorage.app",
+  messagingSenderId: "166705652920",
+  appId: "1:166705652920:web:c883f4f652be10d71c004d"
+};
+/* ================================================================ */
+
+const ADMIN_EMAIL="BrianDongg22@gmail.com";
+const LOCK_GAMES=false;
+const DEL_MS=5*60*1000;          // a finished or empty table is deleted this long after
+const MAX_AGE_MS=12*3600*1000;   // safety net: any table older than this is deleted
+const PRESENCE_MS=75*1000;       // a watcher counts as present for this long after their last heartbeat
+
+/* offset4 is the landlord offset for 4-player games (1 landlord against 3 peasants) */
+const DEF={start:500,scale:400,offset:0,offset4:0,kNew:40,kMid:24,kEst:16,prov:20,est:100};
+const configured=!firebaseConfig.apiKey.startsWith("PASTE");
+let db=null,auth=null;
+const S={admin:false,players:[],ids:{},games:[],cfg:Object.assign({},DEF)};
+let T={};
+
+function $(id){return document.getElementById(id);}
+function el(tag,txt,cls){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e;}
+function sign(x){return(x>=0?"+":"\u2212")+Math.abs(x).toFixed(1);}
+function pct(x){return Math.round(x*100)+"%";}
+function stamp(ms){return ms?new Date(ms).toLocaleString(undefined,{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";}
+function setStatus(t,bad){var s=$("status");s.textContent=t;s.style.color=bad?"var(--land)":"var(--muted)";}
+
+/* ---------- Ratings ----------
+   Zero-sum: whatever the landlord gains, the peasants lose in total, and vice versa.
+   The landlord is rated against the average of the peasants. The size of the swing is
+   K x (result - expected), where K is the average K-factor of everyone at the table.
+   The peasants' side of the swing is split by how surprising the result was for each peasant
+   against the landlord on their own: if the peasants win, the lower-rated peasant gains more;
+   if they lose, the lower-rated peasant loses less. With equal ratings the split is even. */
+function kf(p,c){return p.g<c.prov?c.kNew:(p.g<c.est?c.kMid:c.kEst);}
+function peas(g){return g.c?[g.a,g.b,g.c]:[g.a,g.b];}
+function calc(T,g,c){
+  var L=T[g.l],P=peas(g).map(function(n){return T[n];}),s=g.w?1:0,off=g.c?c.offset4:c.offset;
+  var avg=P.reduce(function(x,p){return x+p.r;},0)/P.length;
+  var e=1/(1+Math.pow(10,(avg-(L.r+off))/c.scale));
+  var K=(kf(L,c)+P.reduce(function(x,p){return x+kf(p,c);},0))/(P.length+1);
+  var w=P.map(function(p){var E=1/(1+Math.pow(10,(L.r+off-p.r)/c.scale));return s?E:1-E;});
+  var tot=w.reduce(function(x,y){return x+y;},0),pool=K*(s-e);
+  return {e:e,dl:pool,dp:w.map(function(x){return-pool*x/tot;})};
+}
+function replay(){
+  var T={},c=S.cfg;
+  S.players.forEach(function(n){T[n]={r:c.start,g:0,lg:0,lw:0,pg:0,pw:0};});
+  S.games.forEach(function(g){
+    g.res=null;
+    var ps=peas(g);
+    if(!(T[g.l]&&ps.every(function(n){return T[n];})))return;
+    var x=calc(T,g,c);g.res=x;
+    T[g.l].r+=x.dl;T[g.l].g++;T[g.l].lg++;if(g.w)T[g.l].lw++;
+    ps.forEach(function(n,i){T[n].r+=x.dp[i];T[n].g++;T[n].pg++;if(!g.w)T[n].pw++;});
+  });
+  return T;
+}
+
+function fillSelects(){
+  ["selL","selA","selB","selC"].forEach(function(id,i){
+    var s=$(id),cur=s.value;s.innerHTML="";
+    if(id==="selC"){var o0=el("option","None (3 players)");o0.value="";s.appendChild(o0);}
+    S.players.forEach(function(n){var o=el("option",n);o.value=n;s.appendChild(o);});
+    if(id==="selC")s.value=(cur&&S.players.indexOf(cur)>=0)?cur:"";
+    else if(cur&&S.players.indexOf(cur)>=0)s.value=cur;else if(S.players[i])s.value=S.players[i];
+  });
+}
+function renderPreview(){
+  var p=$("preview"),btn=$("record");p.innerHTML="";
+  if(!db){btn.disabled=true;p.textContent="Connect the database to record games.";return;}
+  if(LOCK_GAMES&&!S.admin){btn.disabled=true;p.textContent="Enter the passcode to record games.";return;}
+  if(S.players.length<3){btn.disabled=true;p.textContent="Add at least three players to record a game.";return;}
+  var l=$("selL").value,a=$("selA").value,b=$("selB").value,c=$("selC").value;
+  var names=[l,a,b].concat(c?[c]:[]),uniq={};names.forEach(function(n){uniq[n]=1;});
+  if(Object.keys(uniq).length<names.length){btn.disabled=true;p.textContent="Pick different players.";return;}
+  btn.disabled=false;
+  var g={l:l,a:a,b:b,c:c,w:$("wl").checked},x=calc(T,g,S.cfg);
+  p.appendChild(el("div",l+" is expected to win "+pct(x.e)+" of the time."));
+  var bar=el("div",null,"bar"),i=el("i");i.style.width=(x.e*100)+"%";bar.appendChild(i);p.appendChild(bar);
+  p.appendChild(el("div","If recorded: "+l+" "+sign(x.dl)+", "+peas(g).map(function(n,k){return n+" "+sign(x.dp[k]);}).join(", ")));
+}
+function renderBoard(){
+  var b=$("board");b.innerHTML="";
+  if(!S.players.length){b.appendChild(el("p","No players yet. Add the names of everyone who plays.","empty"));return;}
+  var rows=S.players.slice().sort(function(x,y){return T[y].r-T[x].r;});
+  var t=el("table"),h=el("tr");
+  ["#","Player","Rating","Games","As landlord","As peasant",""].forEach(function(x,i){var th=el("th",x);if(i==2||i==3)th.className="num";h.appendChild(th);});
+  t.appendChild(h);
+  rows.forEach(function(n,i){
+    var p=T[n],r=el("tr");
+    r.appendChild(el("td",i+1));r.appendChild(el("td",n));
+    r.appendChild(el("td",Math.round(p.r),"num rating"));r.appendChild(el("td",p.g,"num"));
+    r.appendChild(el("td",p.lg?p.lw+"\u2013"+(p.lg-p.lw)+" ("+pct(p.lw/p.lg)+")":"\u2013"));
+    r.appendChild(el("td",p.pg?p.pw+"\u2013"+(p.pg-p.pw)+" ("+pct(p.pw/p.pg)+")":"\u2013"));
+    var td=el("td");
+    if(!p.g&&db&&S.admin){var x=el("button","\u00d7","x");x.title="Remove "+n;x.setAttribute("aria-label","Remove "+n);x.onclick=function(){deleteDoc(doc(db,"players",S.ids[n])).catch(fail);};td.appendChild(x);}
+    r.appendChild(td);t.appendChild(r);
+  });
+  b.appendChild(t);
+}
+function renderHist(){
+  var u=$("hist");u.innerHTML="";
+  var gs=S.games.slice(-15).reverse();
+  $("undo").style.display=(gs.length&&db&&S.admin)?"":"none";
+  if(!gs.length){u.appendChild(el("li","No games recorded yet.","empty"));return;}
+  gs.forEach(function(g){
+    var li=el("li"),r=g.res;
+    li.appendChild(el("span",g.w?"Landlord won":"Peasants won","tag "+(g.w?"l":"p")));
+    li.appendChild(document.createTextNode(" "+g.l+" (landlord) vs "+peas(g).join(", ")+". "));
+    if(r)li.appendChild(el("span",sign(r.dl)+" / "+r.dp.map(sign).join(" / ")));
+    if(g.t)li.appendChild(el("div",stamp(g.t),"hint"));
+    u.appendChild(li);
+  });
+}
+function refresh(){T=replay();fillSelects();renderBoard();renderHist();renderPreview();if(typeof renderOnline==="function")renderOnline();}
+function fail(e){setStatus("Couldn\u2019t save: "+e.message,true);}
+
+$("addForm").onsubmit=function(e){
+  e.preventDefault();
+  var n=$("newName").value.trim();
+  if(!n||!db)return;
+  var id=n.toLowerCase().replace(/[\/\s]/g,"_");
+  if(S.players.some(function(p){return p.toLowerCase()===n.toLowerCase();})){$("newName").value="";return;}
+  setDoc(doc(db,"players",id),{name:n,t:serverTimestamp()}).catch(fail);
+  $("newName").value="";
+};
+$("record").onclick=function(){
+  if(!db)return;
+  var g={l:$("selL").value,a:$("selA").value,b:$("selB").value,w:$("wl").checked,t:serverTimestamp()};
+  if($("selC").value)g.c=$("selC").value;
+  addDoc(collection(db,"games"),g).catch(fail);
+};
+$("undo").onclick=function(){
+  var g=S.games[S.games.length-1];
+  if(g&&db)deleteDoc(doc(db,"games",g.id)).catch(fail);
+};
+["selL","selA","selB","selC","wl","wp"].forEach(function(id){$(id).addEventListener("change",renderPreview);});
+
+$("impBtn").onclick=async function(){
+  var msg=$("impMsg");
+  if(!db){msg.textContent="Connect the database first.";return;}
+  var lines=$("imp").value.split("\n").map(function(s){return s.trim();}).filter(Boolean);
+  var canon={},errs=[],games=[],newNames=[];
+  S.players.forEach(function(n){canon[n.toLowerCase()]=n;});
+  lines.forEach(function(line,i){
+    var f=line.split(/[,\t]/).map(function(s){return s.trim();});
+    if(f.length!==4){errs.push("Line "+(i+1)+": needs four parts.");return;}
+    var w=f[3].charAt(0).toLowerCase(),won;
+    if(w==="l")won=true;else if(w==="p")won=false;
+    else{errs.push("Line "+(i+1)+": the winner must be L or P.");return;}
+    var names=f.slice(0,3),ok=true;
+    names.forEach(function(n,j){
+      if(!n||n.length>24){ok=false;return;}
+      var k=n.toLowerCase();
+      if(!canon[k]){canon[k]=n;newNames.push(n);}
+      names[j]=canon[k];
+    });
+    if(!ok){errs.push("Line "+(i+1)+": names must be 1 to 24 characters.");return;}
+    var uniq={};names.forEach(function(n){uniq[n.toLowerCase()]=1;});
+    if(Object.keys(uniq).length<3){errs.push("Line "+(i+1)+": use three different players.");return;}
+    games.push({l:names[0],a:names[1],b:names[2],w:won});
+  });
+  if(errs.length){msg.textContent="Nothing imported. "+errs.slice(0,5).join(" ");return;}
+  if(!games.length){msg.textContent="Paste at least one game.";return;}
+  var now=Date.now(),ops=[];
+  newNames.forEach(function(n,j){
+    ops.push([doc(db,"players",n.toLowerCase().replace(/[\/\s]/g,"_")),{name:n,t:new Date(now-(games.length+newNames.length+5-j)*1000)}]);
+  });
+  games.forEach(function(g,i){
+    g.t=new Date(now-(games.length-i)*1000);
+    ops.push([doc(collection(db,"games")),g]);
+  });
+  msg.textContent="Importing\u2026";$("impBtn").disabled=true;
+  try{
+    for(var i=0;i<ops.length;i+=400){
+      var batch=writeBatch(db);
+      ops.slice(i,i+400).forEach(function(o){batch.set(o[0],o[1]);});
+      await batch.commit();
+    }
+    $("imp").value="";
+    msg.textContent="Imported "+games.length+" games"+(newNames.length?" and "+newNames.length+" new players":"")+".";
+  }catch(e){msg.textContent="Couldn\u2019t import: "+e.message;}
+  $("impBtn").disabled=false;
+};
+
+/* ---------- Online play ---------- */
+var CL=["3","4","5","6","7","8","9","10","J","Q","K","A","2"],SU=["\u2660","\u2665","\u2666","\u2663"];
+var room=null,code=null,hand=[],sel={},unsubs=[],acted="";
+var specUnsub=null,specMap={};           // spectators: uid -> cards, read from the public "view" collection
+var watchers=[],presTimer=null;           // who has the table open without a seat
+/* Card ids 0-53 are one deck, 54-107 the second deck (4-player tables). Values 0-12 = 3..2, 13 = small joker, 14 = big joker. */
+function cb(i){return i%54;}
+function cv(i){var b=cb(i);return b>51?b-39:b>>2;}
+function clab(i){var b=cb(i);return b>51?(b==52?"Jkr":"JKR"):CL[b>>2]+SU[b&3];}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return"&#"+c.charCodeAt(0)+";";});}
+function uid(){return auth&&auth.currentUser?auth.currentUser.uid:null;}
+function seat(){return room?room.seats.indexOf(uid()):-1;}
+function NP(){return room&&room.size?room.size:3;}
+function rref(){return doc(db,"rooms",code);}
+function href(id){return doc(db,"rooms",code,"hands",id);}
+function vref(id){return doc(db,"rooms",code,"view",id);}
+function pref(id){return doc(db,"rooms",code,"presence",id);}
+function delAt(){return new Date(Date.now()+DEL_MS);}
+function omsg(t){$("omsg").textContent=t||"";}
+function canon(n){return S.players.filter(function(p){return p.toLowerCase()===String(n).toLowerCase();})[0];}
+function fill(n,v){var a=[];for(var i=0;i<n;i++)a.push(v);return a;}
+
+/* Locked rules. 2s are allowed in straights. */
+const HARD_RULES={single:true,pair:true,triple:true,t1:true,t2:true,st:true,ps:true,ap:true,apw1:true,apw2:true,f2s:true,f2p:true,bomb:true,rocket:true,twos:true,stMin:5,psMin:3};
+function R(){return HARD_RULES;}
+
+function classify(ids,r){
+  r=r||HARD_RULES;
+  var lim=r.twos?12:11,sm=Math.max(3,r.stMin||5),pm=Math.max(2,r.psMin||3);
+  var n=ids.length,vs=ids.map(cv).sort(function(a,b){return a-b;}),c={};
+  vs.forEach(function(v){c[v]=(c[v]||0)+1;});
+  var ks=Object.keys(c).map(Number).sort(function(a,b){return a-b;});
+  function cnt(k){return ks.filter(function(v){return c[v]===k;});}
+  function run(a){for(var i=1;i<a.length;i++)if(a[i]!==a[i-1]+1)return false;return a.length>0&&a[a.length-1]<=lim;}
+  if(!n)return null;
+  if(n==2&&c[13]&&c[14])return{t:"rocket",n:2,v:99};
+  if(n==4&&c[13]===2&&c[14]===2)return{t:"rocket",n:4,v:100};   /* all four jokers (two-deck games) */
+  if(n==4&&ks.length==1)return{t:"bomb",n:4,v:vs[0]};
+  if(n<=3&&ks.length==1)return{t:"x",n:n,v:vs[0]};
+  if(n==4&&cnt(3).length==1)return{t:"t1",n:4,v:cnt(3)[0]};
+  if(n==5&&cnt(3).length==1&&cnt(2).length==1)return{t:"t2",n:5,v:cnt(3)[0]};
+  if(n>=sm&&ks.length==n&&run(ks))return{t:"st",n:n,v:ks[0]};
+  if(n%2==0&&ks.length>=pm&&cnt(2).length==ks.length&&run(ks))return{t:"ps",n:n,v:ks[0]};
+  if(n==6&&cnt(4).length==1)return{t:"f2",n:6,v:cnt(4)[0],w:1};
+  if(n==8&&cnt(4).length==1&&cnt(2).length==2)return{t:"f2",n:8,v:cnt(4)[0],w:2};
+  var T3=cnt(3);
+  for(var k=2;k<=10;k++){
+    if(n!==3*k&&n!==4*k&&n!==5*k)continue;
+    for(var s=0;s+k<=T3.length;s++){
+      var q=T3.slice(s,s+k);if(!run(q))continue;
+      var rest=n-3*k;
+      if(rest===0||rest===k||(rest===2*k&&ks.filter(function(v){return q.indexOf(v)<0;}).every(function(v){return c[v]===2;})))return{t:"ap"+k,n:n,v:q[0],w:rest===0?0:(rest===k?1:2)};
+    }
+  }
+  return null;
+}
+function allowed(c,r){
+  var t=c.t;
+  if(t==="rocket")return!!r.rocket;
+  if(t==="bomb")return!!r.bomb;
+  if(t==="x")return!!(c.n==1?r.single:(c.n==2?r.pair:r.triple));
+  if(t==="t1")return!!r.t1;
+  if(t==="t2")return!!r.t2;
+  if(t==="st")return!!r.st;
+  if(t==="ps")return!!r.ps;
+  if(t==="f2")return!!(c.w==1?r.f2s:r.f2p);
+  return!!(c.w===0?r.ap:(c.w===1?r.apw1:r.apw2));
+}
+function beats(p,c){
+  if(!p)return true;
+  if(c.t==="rocket")return p.t!=="rocket"||c.v>p.v;
+  if(p.t==="rocket")return false;
+  if(c.t==="bomb")return p.t!=="bomb"||c.v>p.v;
+  if(p.t==="bomb")return false;
+  return c.t===p.t&&c.n===p.n&&c.v>p.v;
+}
+function comboName(c){
+  var t=c.t;
+  if(t==="rocket")return c.n===4?"Joker bomb":"Rocket";
+  if(t==="x")return["","Single","Pair","Triple"][c.n];
+  if(/^ap/.test(t))return"Airplane";
+  return({bomb:"Bomb",t1:"Triple + single",t2:"Triple + pair",st:"Straight",ps:"Pair straight",f2:"Four + two"})[t]||t;
+}
+
+/* Lowest legal play. Leading: the lowest single card. Following: the lowest
+   combination of the same type that beats the last play, then the lowest bomb,
+   then the rocket. Returns an array of card ids, or null if nothing can beat it. */
+function lowestPlay(cards,lastPlay){
+  var by={},vals=[];
+  cards.slice().sort(function(a,b){return cv(a)-cv(b)||a-b;}).forEach(function(c){var v=cv(c);if(!by[v]){by[v]=[];vals.push(v);}by[v].push(c);});
+  vals.sort(function(a,b){return a-b;});
+  if(!vals.length)return null;
+  if(!lastPlay)return[by[vals[0]][0]];
+  var last=classify(lastPlay.cards,R());
+  if(!last)return null;
+  var lim=R().twos?12:11;
+  function n(v){return by[v]?by[v].length:0;}
+  function take(v,k){return by[v].slice(0,k);}
+  function singles(ex,k){
+    var out=[];
+    for(var i=0;i<vals.length&&out.length<k;i++){
+      var v=vals[i];if(ex.indexOf(v)>=0)continue;
+      for(var j=0;j<by[v].length&&out.length<k;j++)out.push(by[v][j]);
+    }
+    return out.length===k?out:null;
+  }
+  function pairs(ex,k){
+    var out=[],got=0;
+    for(var i=0;i<vals.length&&got<k;i++){
+      var v=vals[i];if(v>12||ex.indexOf(v)>=0||n(v)<2)continue;
+      out=out.concat(take(v,2));got++;
+    }
+    return got===k?out:null;
+  }
+  function runs(len,per){
+    var out=[];
+    for(var s=last.v+1;s+len-1<=lim;s++){
+      var ok=true,i;
+      for(i=0;i<len;i++)if(n(s+i)<per){ok=false;break;}
+      if(!ok)continue;
+      var cs=[],vs=[];
+      for(i=0;i<len;i++){cs=cs.concat(take(s+i,per));vs.push(s+i);}
+      out.push({cs:cs,vs:vs});
+    }
+    return out;
+  }
+  var cands=[],t=last.t,i,v,x;
+  if(t==="x"){
+    for(i=0;i<vals.length;i++){v=vals[i];if(v<=last.v)continue;
+      if(last.n===1||(v<=12&&n(v)>=last.n))cands.push(take(v,last.n));}
+  }else if(t==="t1"||t==="t2"){
+    for(i=0;i<vals.length;i++){v=vals[i];if(v<=last.v||v>12||n(v)<3)continue;
+      x=t==="t1"?singles([v],1):pairs([v],1);
+      if(x)cands.push(take(v,3).concat(x));}
+  }else if(t==="st"){
+    runs(last.n,1).forEach(function(r){cands.push(r.cs);});
+  }else if(t==="ps"){
+    runs(last.n/2,2).forEach(function(r){cands.push(r.cs);});
+  }else if(t==="f2"){
+    for(i=0;i<vals.length;i++){v=vals[i];if(v<=last.v||v>12||n(v)<4)continue;
+      x=last.w===1?singles([v],2):pairs([v],2);
+      if(x)cands.push(take(v,4).concat(x));}
+  }else if(/^ap\d+$/.test(t)){
+    var k=+t.slice(2);
+    runs(k,3).forEach(function(r){
+      if(last.w===0){cands.push(r.cs);return;}
+      var y=last.w===1?singles(r.vs,k):pairs(r.vs,k);
+      if(y)cands.push(r.cs.concat(y));
+    });
+  }
+  for(i=0;i<cands.length;i++){
+    var cl=classify(cands[i],R());
+    if(cl&&allowed(cl,R())&&beats(last,cl))return cands[i];
+  }
+  if(last.t!=="rocket"){
+    if(R().bomb)for(i=0;i<vals.length;i++){v=vals[i];if(v<=12&&n(v)>=4&&(last.t!=="bomb"||v>last.v))return take(v,4);}
+    if(R().rocket&&n(13)&&n(14))return[by[13][0],by[14][0]];
+  }
+  return null;
+}
+
+function watch(c){
+  unsubs.forEach(function(u){u();});unsubs=[];code=c;hand=[];sel={};specUnsub=null;specMap={};watchers=[];
+  if(presTimer)clearInterval(presTimer);
+  $("olog").innerHTML="";
+  if(location.hash.slice(1)!==c)history.replaceState(null,"","#"+c);
+
+  unsubs.push(onSnapshot(rref(),function(d){
+    room=d.exists()?d.data():null;
+    if(!room)omsg("That table doesn\u2019t exist (it may have been cleaned up).");
+    onRoom();
+  },function(e){omsg(e.message);}));
+
+  unsubs.push(onSnapshot(href(uid()),function(d){hand=d.exists()?d.data().cards:[];var s2={};hand.forEach(function(x){if(sel[x])s2[x]=1;});sel=s2;renderOnline();},function(){}));
+
+  unsubs.push(onSnapshot(query(collection(db,"rooms",c,"chat"),orderBy("t"),limitToLast(50)),function(snap){
+    var l=$("olog");l.innerHTML="";
+    snap.forEach(function(d){var m=d.data(),p=document.createElement("p"),b=document.createElement("b");b.textContent=m.name+": ";p.appendChild(b);p.appendChild(document.createTextNode(m.text));l.appendChild(p);});
+    l.scrollTop=l.scrollHeight;
+  },function(){}));
+
+  /* who has this table open */
+  unsubs.push(onSnapshot(collection(db,"rooms",c,"presence"),function(snap){
+    watchers=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{uid:d.id,name:x.name||"Guest",t:x.t&&x.t.toMillis?x.t.toMillis():Date.now()};});
+    renderOnline();
+  },function(){}));
+  watchStart=Date.now();
+  presTimer=setInterval(function(){beat();renderOnline();},15000);
+  setTimeout(beat,1500);
+}
+
+/* Non-seated viewers announce themselves every 20 seconds so others can see who is watching. */
+function myLabel(){var s=seat();return(room&&s>=0)?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");}
+function beat(){
+  if(!db||!code||!uid()||!room)return;
+  setDoc(pref(uid()),{name:myLabel(),t:serverTimestamp()}).catch(function(){});
+}
+window.addEventListener("pagehide",function(){if(db&&code&&uid()&&seat()<0)deleteDoc(pref(uid())).catch(function(){});});
+
+/* Spectators listen to one public "view" collection that mirrors every seat's hand. */
+function syncSpectate(){
+  if(!room||!code)return;
+  if(seat()<0&&!specUnsub){
+    specUnsub=onSnapshot(collection(db,"rooms",code,"view"),function(snap){
+      var m={};snap.forEach(function(d){m[d.id]=d.data().cards||[];});
+      specMap=m;renderOnline();
+    },function(e){omsg("Can\u2019t load hands to spectate: "+e.message);});
+    unsubs.push(specUnsub);
+  }else if(seat()>=0&&specUnsub){
+    specUnsub();specUnsub=null;specMap={};
+  }
+}
+
+function onRoom(){
+  var k=tKey();if(k!==turnKey){turnKey=k;turnSeen=Date.now();}
+  if(room){
+    var key=code+":"+room.gameNo+":"+room.phase;
+    if(room.phase==="resolve"&&room.host===uid()&&acted!==key){acted=key;resolve().catch(function(e){omsg(e.message);});}
+    if(room.phase==="done"&&seat()===room.winner&&acted!==key){acted=key;if(room.rated!==false)record();saveReplay();}
+  }
+  syncSpectate();
+  renderOnline();
+}
+
+/* 3 players: one deck, 17 cards each, 3 left over for the landlord.
+   4 players: two decks (108 cards), 25 cards each, 8 left over for the landlord. */
+async function deal(again){
+  var N=NP(),per=N===4?25:17,total=N===4?108:54,d=[],i,j,x;
+  for(i=0;i<total;i++)d.push(i);
+  for(i=total-1;i>0;i--){j=Math.floor(Math.random()*(i+1));x=d[i];d[i]=d[j];d[j]=x;}
+  var b=writeBatch(db);
+  for(i=0;i<N;i++){
+    var cs=d.slice(i*per,i*per+per);
+    b.set(href(room.seats[i]),{cards:cs});
+    b.set(vref(room.seats[i]),{cards:cs});
+  }
+  b.set(href("kitty"),{cards:d.slice(N*per)});
+  b.update(rref(),{phase:"bid",moves:[],bids:fill(N,null),counts:fill(N,per),last:null,shown:null,passes:0,landlord:-1,kitty:[],winner:-1,winnerName:"",turn:-1,gameNo:room.gameNo+1,deleteAt:null,note:again?"Nobody wanted to be landlord, so the cards were reshuffled.":""});
+  await b.commit();
+}
+
+async function resolve(){
+  var bids=room.bids||fill(NP(),false),yes=[];
+  bids.forEach(function(v,i){if(v===true)yes.push(i);});
+  // Nobody said yes: reshuffle everyone's hands and ask again
+  if(!yes.length)return deal(true);
+  // One or more said yes: pick randomly among them
+  var hs=yes[Math.floor(Math.random()*yes.length)];
+  var k=(await getDoc(href("kitty"))).data().cards,ld=room.seats[hs],cards=(await getDoc(href(ld))).data().cards.concat(k),counts=room.counts.slice();
+  counts[hs]=cards.length;
+  var b=writeBatch(db);
+  b.set(href(ld),{cards:cards});
+  b.set(vref(ld),{cards:cards});
+  b.update(rref(),{phase:"play",landlord:hs,hs:hs,kitty:k,turn:hs,counts:counts,last:null,shown:null,passes:0,note:""});
+  await b.commit();
+}
+
+/* Rated tables only. Peasants are listed in seat order after the landlord. */
+function record(){
+  var N=NP(),nm=room.names.map(canon);
+  if(nm.some(function(x){return !x;})){omsg("Not added to the leaderboard: every name must match a leaderboard player.");return;}
+  var L=room.landlord,g={l:nm[L],a:nm[(L+1)%N],b:nm[(L+2)%N],w:room.winner===L,t:serverTimestamp()};
+  if(N===4)g.c=nm[(L+3)%N];
+  setDoc(doc(db,"games","online_"+code+"_"+room.gameNo),g).catch(function(){});
+}
+
+/* Everyone answers yes or no at the same time; answers stay hidden until all are in. */
+function bid(v){
+  var s=seat();if(s<0)return;
+  var rr=rref();
+  runTransaction(db,async function(tx){
+    var d=await tx.get(rr);if(!d.exists())return;
+    var r=d.data();if(r.phase!=="bid")return;
+    var b=r.bids.slice();
+    if(b[s]!==null)return;
+    b[s]=v;
+    tx.update(rr,b.every(function(x){return x!==null;})?{bids:b,phase:"resolve"}:{bids:b});
+  }).catch(function(e){omsg(e.message);});
+}
+
+function play(){
+  var N=NP(),s=seat(),ids=hand.filter(function(c){return sel[c];}),cl=classify(ids,R());
+  if(!cl){omsg("That isn\u2019t a valid combination.");return;}
+  if(!allowed(cl,R())){omsg("That combination isn\u2019t allowed at this table.");return;}
+  var last=room.last&&room.last.seat!==s?room.last:null;
+  if(!beats(last,cl)){omsg("That doesn\u2019t beat the last play.");return;}
+
+  var left=hand.filter(function(c){return !sel[c];}),counts=room.counts.slice();counts[s]=left.length;
+
+  // A rocket can't be beaten, so its player simply leads again
+  var isR=cl.t==="rocket";
+  var up={last:{seat:s,cards:ids,t:cl.t,n:cl.n,v:cl.v},shown:{seat:s,cards:ids,label:comboName(cl)},counts:counts,passes:isR?N-1:0,turn:isR?s:(s+1)%N};
+  up.moves=arrayUnion({i:(room.moves||[]).length,s:s,c:ids});
+  if(!left.length){up.phase="done";up.winner=s;up.winnerName=room.names[s];up.turn=-1;up.deleteAt=delAt();}
+  sel={};omsg("");
+  var b=writeBatch(db);
+  b.set(href(uid()),{cards:left});
+  b.set(vref(uid()),{cards:left});
+  b.commit().then(function(){return updateDoc(rref(),up);}).catch(function(e){omsg(e.message);});
+}
+
+function selectLowestPlay(){
+  if(!room||!hand.length)return;
+  var s=seat(),last=room.last&&room.last.seat!==s?room.last:null;
+  var pick=lowestPlay(hand,last);
+  sel={};
+  if(!pick){omsg("Nothing in your hand can beat that. You\u2019ll have to pass.");renderOnline();return;}
+  pick.forEach(function(c){sel[c]=1;});
+  omsg("");renderOnline();
+}
+
+function pass(){
+  var N=NP(),s=seat(),p=room.passes+1,mv=arrayUnion({i:(room.moves||[]).length,s:s,c:[]});
+  updateDoc(rref(),p>=N-1?{last:null,passes:0,turn:room.last.seat,moves:mv}:{passes:p,turn:(s+1)%N,moves:mv}).catch(function(e){omsg(e.message);});
+}
+function myName(){
+  var n=$("oname").value.trim();
+  if(!n||n.length>24){omsg("Enter your name (up to 24 characters).");return null;}
+  try{localStorage.setItem("ll-name",n);}catch(e){}
+  if(!uid()){omsg("Still connecting. Try again in a moment.");return null;}
+  return n;
+}
+async function createRoom(){
+  var n=myName();if(!n)return;
+  var N=$("osize").value==="4"?4:3,rated=$("omode").value!=="0";
+  var c="",A="ABCDEFGHJKLMNPQRSTUVWXYZ";for(var i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];
+  var seats=fill(N,""),names=fill(N,"");seats[0]=uid();names[0]=n;
+  try{await setDoc(doc(db,"rooms",c),{host:uid(),seats:seats,names:names,size:N,rated:rated,phase:"lobby",gameNo:0,counts:fill(N,0),rules:HARD_RULES,deleteAt:null,t:serverTimestamp()});watch(c);omsg("");}
+  catch(e){omsg(e.message);}
+}
+async function joinRoom(c){
+  var n=myName();if(!n)return;
+  c=String(c||"").trim().toUpperCase();if(!c)return;
+  try{
+    var d=await getDoc(doc(db,"rooms",c));
+    if(!d.exists()){omsg("No table with that code.");return;}
+    var r=d.data();
+    if(r.seats.indexOf(uid())<0){
+      var i=r.seats.indexOf("");
+      if(i<0||(r.phase!=="lobby"&&r.phase!=="done")){omsg("That table is full or already playing.");return;}
+      if(r.names.some(function(x){return x.toLowerCase()===n.toLowerCase();})){omsg("Someone at that table already has that name.");return;}
+      r.seats[i]=uid();r.names[i]=n;
+      var up={seats:r.seats,names:r.names,deleteAt:null};
+      if(r.seats.indexOf(r.host)<0)up.host=uid(); // the old host left
+      await updateDoc(doc(db,"rooms",c),up);
+    }
+    watch(c);omsg("");
+  }catch(e){omsg(e.message);}
+}
+/* Resets a game in progress back to the waiting room. No result is recorded, so nothing changes in
+   anyone's rating. The players listed in "gone" lose their seat; everyone else keeps theirs. */
+async function resetGame(c,why,gone){
+  var rr=doc(db,"rooms",c);
+  try{
+    await runTransaction(db,async function(tx){
+      var d=await tx.get(rr);if(!d.exists())return;
+      var r=d.data();
+      if(["bid","resolve","play"].indexOf(r.phase)<0)return;
+      var N=r.size||3,seats=r.seats.slice(),names=r.names.slice();
+      seats.forEach(function(u,i){if(gone.indexOf(u)>=0){seats[i]="";names[i]="";}});
+      var rest=seats.filter(Boolean);
+      var up={phase:"lobby",seats:seats,names:names,bids:fill(N,null),counts:fill(N,0),last:null,shown:null,moves:[],passes:0,landlord:-1,kitty:[],winner:-1,winnerName:"",turn:-1,note:why,deleteAt:rest.length?null:delAt()};
+      if(rest.length&&seats.indexOf(r.host)<0)up.host=rest[0];
+      tx.update(rr,up);
+    });
+  }catch(e){}
+}
+/* A seated player whose browser has stopped sending heartbeats has left. */
+function checkAbsent(){
+  if(!room||!code||seat()<0||resetting)return;
+  if(["bid","resolve","play"].indexOf(room.phase)<0)return;
+  if(Date.now()-watchStart<30000)return;
+  var now=Date.now(),pm={},gone=[],who=[];
+  watchers.forEach(function(x){pm[x.uid]=x.t;});
+  room.seats.forEach(function(u,i){
+    if(u&&u!==uid()&&(!pm[u]||now-pm[u]>45000)){gone.push(u);who.push(room.names[i]);}
+  });
+  if(!gone.length)return;
+  resetting=true;
+  resetGame(code,who.join(", ")+(who.length>1?" left":" left")+", so the game was reset. No ratings changed.",gone).then(function(){resetting=false;});
+}
+
+/* Leaving a table that isn't mid-game frees the seat. Leaving mid-game resets the game for everyone
+   with no rating changes. If nobody is left, the table is deleted in 5 minutes. */
+async function leaveRoom(){
+  var c=code,me=uid(),wasSeated=seat()>=0,mid=!!room&&["bid","resolve","play"].indexOf(room.phase)>=0,myN=wasSeated?room.names[seat()]:"";
+  if(wasSeated&&mid&&!confirm("Leaving now resets the game for everyone. No ratings change. Leave anyway?"))return;
+  unsubs.forEach(function(u){u();});unsubs=[];specUnsub=null;specMap={};watchers=[];
+  if(presTimer){clearInterval(presTimer);presTimer=null;}
+  if(c&&me)deleteDoc(doc(db,"rooms",c,"presence",me)).catch(function(){});
+  room=null;code=null;hand=[];$("olog").innerHTML="";
+  history.replaceState(null,"",location.pathname+location.search);
+  renderOnline();omsg("");
+  if(!c||!me||!wasSeated)return;
+  if(mid){
+    await resetGame(c,myN+" left, so the game was reset. No ratings changed.",[me]);
+    deleteDoc(doc(db,"rooms",c,"hands",me)).catch(function(){});
+    deleteDoc(doc(db,"rooms",c,"view",me)).catch(function(){});
+    return;
+  }
+  try{
+    var rr=doc(db,"rooms",c),freed=false;
+    await runTransaction(db,async function(tx){
+      var d=await tx.get(rr);if(!d.exists())return;
+      var r=d.data(),i=r.seats.indexOf(me);
+      if(i<0||(r.phase!=="lobby"&&r.phase!=="done"))return;
+      var seats=r.seats.slice(),names=r.names.slice();seats[i]="";names[i]="";
+      var rest=seats.filter(Boolean),up={seats:seats,names:names};
+      if(!rest.length)up.deleteAt=delAt();
+      else if(r.host===me)up.host=rest[0];
+      tx.update(rr,up);freed=true;
+    });
+    if(freed){
+      deleteDoc(doc(db,"rooms",c,"hands",me)).catch(function(){});
+      deleteDoc(doc(db,"rooms",c,"view",me)).catch(function(){});
+    }
+  }catch(e){}
+}
+
+/* ---------- Public table list ---------- */
+var pubRooms=[],lobbyUnsub=null;
+function tmOf(r){return r.t&&r.t.toMillis?r.t.toMillis():Date.now();}
+function startLobby(){
+  if(lobbyUnsub||!db)return;
+  var box=$("opublic");if(box&&!pubRooms.length)box.textContent="Loading tables…";
+  lobbyUnsub=onSnapshot(query(collection(db,"rooms"),limit(50)),function(snap){
+    pubRooms=snap.docs.map(function(d){return Object.assign({code:d.id},d.data());}).sort(function(a,b){return tmOf(b)-tmOf(a);});
+    renderPublic();
+  },function(e){
+    var b=$("opublic");if(b)b.textContent="Can’t load tables: "+e.message;
+    lobbyUnsub=null;setTimeout(startLobby,5000); // retries, so publishing the rules fixes it without a refresh
+  });
+}
+function renderPublic(){
+  var box=$("opublic");if(!box)return;
+  box.innerHTML="";
+  var rows=pubRooms.filter(function(r){return r.seats&&r.names&&r.seats.some(Boolean);});
+  if(!rows.length){box.appendChild(el("p","No open tables yet. Create one above.","empty"));return;}
+  rows.forEach(function(r){
+    var names=r.names.filter(Boolean),open=r.seats.indexOf("")>=0&&(r.phase==="lobby"||r.phase==="done");
+    var row=el("div",null,"pub"),info=el("div",null,"pubinfo");
+    info.appendChild(el("b",r.code));
+    info.appendChild(document.createTextNode(" · "+(r.phase==="lobby"?"waiting":(r.phase==="done"?"finished":"playing"))+" · "+names.length+"/"+r.seats.length+(r.seats.length===4?" · 4 players":"")+(r.rated===false?" · casual":"")));
+    info.appendChild(el("div",names.join(", "),"hint"));
+    row.appendChild(info);
+    var acts=el("div",null,"pubacts");
+    if(open){var j=el("button","Join");j.dataset.act="pjoin";j.dataset.code=r.code;acts.appendChild(j);}
+    var w=el("button","Watch");w.dataset.act="pwatch";w.dataset.code=r.code;acts.appendChild(w);
+    row.appendChild(acts);box.appendChild(row);
+  });
+}
+function watchRoom(c){
+  if(!uid()){omsg("Still connecting. Try again in a moment.");return;}
+  watch(c);omsg("");
+}
+
+/* ---------- Turn timer (rated tables) ----------
+   Every browser starts its own 30-second countdown when it sees the turn change, so nothing depends
+   on clocks agreeing. The player whose turn it is acts for themselves when their countdown ends:
+   leading plays the lowest card, otherwise they pass (and an unanswered landlord question becomes "no"). */
+var TURN_MS=30000,turnKey="",turnSeen=0,autoKey="",watchStart=0,resetting=false;
+function tKey(){
+  if(!room)return"";
+  if(room.phase==="bid")return code+":"+room.gameNo+":bid";
+  if(room.phase==="play")return code+":"+room.gameNo+":p:"+(room.moves?room.moves.length:0);
+  return"";
+}
+function timed(){return!!room&&room.rated!==false&&(room.phase==="bid"||room.phase==="play");}
+function updateTimers(){
+  var on=timed(),left=on?Math.max(0,TURN_MS-(Date.now()-turnSeen)):0;
+  document.querySelectorAll(".tm").forEach(function(e){
+    var i=+e.dataset.s,show=on&&(room.phase==="play"?room.turn===i:(!!room.names[i]&&room.bids&&room.bids[i]===null));
+    e.textContent=show?"\u23f1 "+Math.ceil(left/1000)+"s":"";
+    e.className="tm"+(show&&left<=10000?" low":"");
+  });
+  return left;
+}
+function autoAct(){
+  var s=seat();
+  if(room.phase==="bid"){if(s>=0&&room.bids[s]===null){omsg("Time ran out, so you said no to being landlord.");bid(false);}return;}
+  if(s<0||s!==room.turn)return;
+  if(room.last&&room.last.seat!==s){omsg("Time ran out, so you passed.");pass();return;}
+  var pick=lowestPlay(hand,null);if(!pick)return;
+  sel={};pick.forEach(function(c){sel[c]=1;});
+  omsg("Time ran out, so your lowest card was played.");play();
+}
+function tick(){
+  var left=updateTimers();
+  if(timed()&&left===0&&autoKey!==turnKey){autoKey=turnKey;autoAct();}
+  checkAbsent();
+}
+setInterval(tick,1000);
+
+/* ---------- Game history (move-by-move replays) ----------
+   When an online game ends, the winner's browser saves it: the starting hands (rebuilt from what is
+   left in each hand plus everything that was played), then every play and pass in order. */
+async function saveReplay(){
+  try{
+    var N=NP(),snap=await getDocs(collection(db,"rooms",code,"view")),fin={},hands={},i;
+    snap.forEach(function(d){fin[d.id]=d.data().cards||[];});
+    var mv=(room.moves||[]).slice().sort(function(a,b){return a.i-b.i;});
+    for(i=0;i<N;i++)hands[String(i)]=(fin[room.seats[i]]||[]).slice();
+    mv.forEach(function(m){m.c.forEach(function(c){hands[String(m.s)].push(c);});});
+    await setDoc(doc(db,"replays","online_"+code+"_"+room.gameNo),{names:room.names,n:N,landlord:room.landlord,winner:room.winner,rated:room.rated!==false,kitty:room.kitty||[],hands:hands,moves:mv.map(function(m){return{s:m.s,c:m.c};}),t:serverTimestamp()});
+  }catch(e){}
+}
+var rpList=[],rp=null,rpUnsub=null;
+function startReplays(){
+  if(rpUnsub||!db)return;
+  rpUnsub=onSnapshot(query(collection(db,"replays"),orderBy("t","desc"),limit(20)),function(snap){
+    rpList=snap.docs.map(function(d){return Object.assign({id:d.id},d.data({serverTimestamps:"estimate"}));});
+    renderReplayList();
+  },function(e){var b=$("rplist");if(b)b.textContent="Can\u2019t load game history: "+e.message;rpUnsub=null;setTimeout(startReplays,5000);});
+}
+function renderReplayList(){
+  var box=$("rplist");box.innerHTML="";
+  if(!rpList.length){box.appendChild(el("p","No online games saved yet.","empty"));return;}
+  rpList.forEach(function(r){
+    var row=el("div",null,"pub"),info=el("div",null,"pubinfo"),win=r.winner===r.landlord;
+    info.appendChild(el("b",r.names[r.landlord]+" (landlord)"));
+    info.appendChild(document.createTextNode(" vs "+r.names.filter(function(n,i){return i!==r.landlord;}).join(", ")+" \u00b7 "+(win?"landlord won":"peasants won")+" \u00b7 "+r.moves.length+" moves"+(r.rated?"":" \u00b7 casual")));
+    if(r.t&&r.t.toMillis)info.appendChild(el("div",stamp(r.t.toMillis()),"hint"));
+    row.appendChild(info);
+    var a=el("div",null,"pubacts"),b=el("button","Review");b.dataset.rid=r.id;a.appendChild(b);row.appendChild(a);box.appendChild(row);
+  });
+}
+async function openReplay(id){
+  var d=rpList.filter(function(x){return x.id===id;})[0],v=$("rpview");
+  if(!d){try{var s=await getDoc(doc(db,"replays",id));if(s.exists())d=Object.assign({id:id},s.data());}catch(e){}}
+  if(!d){v.hidden=false;v.textContent="That game is still being saved. Try again in a moment.";v.scrollIntoView({behavior:"smooth",block:"start"});return;}
+  rp={d:d,k:0};renderReplay();v.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function labelOf(cs){return cs.slice().sort(function(a,b){return cv(a)-cv(b)||a-b;}).map(clab).join(" ");}
+function moveText(m){
+  if(!m.c.length)return"Pass";
+  var cl=classify(m.c);return(cl?comboName(cl):"Play")+": "+labelOf(m.c);
+}
+function renderReplay(){
+  var v=$("rpview");
+  if(!rp){v.hidden=true;return;}
+  var d=rp.d,N=d.n,M=d.moves.length,k=rp.k,hands=[],last=null,i;
+  for(i=0;i<N;i++)hands.push((d.hands[String(i)]||[]).slice());
+  for(i=0;i<k;i++){
+    var m=d.moves[i];
+    m.c.forEach(function(c){var x=hands[m.s].indexOf(c);if(x>=0)hands[m.s].splice(x,1);});
+    if(m.c.length)last=m;
+  }
+  var cur=k>0?d.moves[k-1]:null,h='<p><b>'+esc(d.names[d.landlord])+' (landlord)</b> vs '+d.names.filter(function(n,j){return j!==d.landlord;}).map(esc).join(", ")+(d.rated?"":' <span class="tag p">Casual</span>')+' <button class="link" data-rp="close">Close</button></p>';
+  h+='<div class="rpnav"><button data-rp="first" aria-label="Start">\u23ee</button><button data-rp="prev" aria-label="Previous move">\u25c0</button><button data-rp="next" aria-label="Next move">\u25b6</button><button data-rp="last" aria-label="End">\u23ed</button><span class="hint" style="margin:0">Move '+k+' of '+M+' \u00b7 use \u2190 \u2192</span></div>';
+  h+='<div class="seats" style="grid-template-columns:repeat('+N+',minmax(0,1fr))">';
+  for(i=0;i<N;i++)h+='<div class="seat'+(cur&&cur.s===i?" on":"")+'"><b>'+esc(d.names[i])+"</b><br>"+(d.landlord===i?'<span class="tag l">Landlord</span> ':"")+hands[i].length+" cards</div>";
+  h+="</div>";
+  if(k===0)h+='<p class="hint">Starting hands. The landlord\u2019s extra cards ('+d.kitty.map(clab).join(" ")+") are already in their hand.</p>";
+  else h+="<p><b>"+esc(d.names[cur.s])+"</b>: "+esc(moveText(cur))+"</p>";
+  if(last&&last!==cur)h+='<p class="hint">Last played by '+esc(d.names[last.s])+":</p>";
+  if(last)h+='<div class="hand">'+last.c.slice().sort(function(a,b){return cv(a)-cv(b)||a-b;}).map(function(c){return cardH(c);}).join("")+"</div>";
+  if(k===M)h+="<p><b>"+esc(d.names[d.winner])+" wins \u2014 "+(d.winner===d.landlord?"the landlord wins.":"the peasants win.")+"</b></p>";
+  for(i=0;i<N;i++)h+='<p class="hint" style="margin-bottom:0">'+esc(d.names[i])+'</p><div class="hand" style="margin-top:2px">'+sortedH(hands[i],false)+"</div>";
+  h+='<p class="hint">Move list</p><div class="mvs">'+d.moves.map(function(m,j){
+    return'<button class="mv'+(m.s===d.landlord?" ll":"")+(k===j+1?" cur":"")+'" data-k="'+(j+1)+'"><b>'+(j+1)+".</b> "+esc(d.names[m.s])+" "+(m.c.length?esc(labelOf(m.c)):"pass")+"</button>";
+  }).join("")+"</div>";
+  v.innerHTML=h;v.hidden=false;
+}
+$("hsec").onclick=function(e){
+  var t=e.target.closest("[data-rid],[data-rp],[data-k]");if(!t)return;
+  if(t.dataset.rid){openReplay(t.dataset.rid);return;}
+  if(!rp)return;
+  var M=rp.d.moves.length;
+  if(t.dataset.k!==undefined)rp.k=+t.dataset.k;
+  else{
+    var a=t.dataset.rp;
+    if(a==="first")rp.k=0;else if(a==="prev")rp.k=Math.max(0,rp.k-1);else if(a==="next")rp.k=Math.min(M,rp.k+1);else if(a==="last")rp.k=M;else if(a==="close")rp=null;
+  }
+  renderReplay();
+};
+document.addEventListener("keydown",function(e){
+  if(!rp||$("rpview").hidden)return;
+  var tag=(e.target.tagName||"").toLowerCase();if(tag==="input"||tag==="textarea"||tag==="select")return;
+  var M=rp.d.moves.length;
+  if(e.key==="ArrowLeft")rp.k=Math.max(0,rp.k-1);else if(e.key==="ArrowRight")rp.k=Math.min(M,rp.k+1);else return;
+  e.preventDefault();renderReplay();
+});
+
+/* ---------- Table cleanup ---------- */
+var sweeping=false,sweepTimer=null;
+async function deleteRoom(c,r){
+  var kill=function(ref){return deleteDoc(ref).catch(function(){});};
+  var subs=["chat","view","presence"];
+  for(var i=0;i<subs.length;i++){
+    try{var snap=await getDocs(collection(db,"rooms",c,subs[i]));await Promise.all(snap.docs.map(function(d){return kill(d.ref);}));}catch(e){}
+  }
+  var ids=["kitty"].concat((r.seats||[]).filter(Boolean));
+  await Promise.all(ids.map(function(id){return kill(doc(db,"rooms",c,"hands",id));}));
+  await deleteDoc(doc(db,"rooms",c));
+}
+async function sweepQuery(q,test){
+  var snap=await getDocs(q);
+  for(var i=0;i<snap.docs.length;i++){
+    var d=snap.docs[i],fresh=await getDoc(d.ref);
+    if(!fresh.exists())continue;
+    var r=fresh.data();
+    if(test(r))await deleteRoom(d.id,r);
+  }
+}
+async function sweep(){
+  if(!db||!uid()||sweeping)return;
+  sweeping=true;
+  try{
+    var now=Date.now();
+    // finished or empty tables whose 5 minutes are up (re-checked right before deleting)
+    await sweepQuery(query(collection(db,"rooms"),where("deleteAt","<=",new Date(now))),function(r){return r.deleteAt&&r.deleteAt.toMillis()<=Date.now();});
+    // abandoned tables nobody ever left or finished
+    await sweepQuery(query(collection(db,"rooms"),where("t","<",new Date(now-MAX_AGE_MS))),function(r){return true;});
+  }catch(e){}
+  sweeping=false;
+}
+
+function cardH(c,btn){
+  var b=cb(c),red=b<52?((b&3)==1||(b&3)==2):b==53,tag=btn?"button":"span";
+  return"<"+tag+(btn?' data-id="'+c+'"':"")+' class="card'+(red?" red":"")+(sel[c]?" sel":"")+'">'+clab(c)+"</"+tag+">";
+}
+function sortedH(cards,btn){
+  return cards.slice().sort(function(a,b){return cv(b)-cv(a)||b-a;}).map(function(c){return cardH(c,btn);}).join("");
+}
+
+function renderOnline(){
+  $("olobby").hidden=!!room;$("otable").hidden=!room;$("ochatbox").hidden=!room;
+  if(!room)return;
+
+  var N=NP(),s=seat(),ph=room.phase,h="",i;
+  h+='<p><b>Table '+esc(code)+'</b> '+(room.rated===false?'<span class="tag p">Casual</span>':'<span class="tag l">Rated</span>')+(N===4?' <span class="tag p">4 players, 2 decks</span>':"")+' <button class="link" data-act="share">Copy link</button> <button class="link" data-act="leave">Leave</button></p>';
+  h+='<div class="seats" style="grid-template-columns:repeat('+N+',minmax(0,1fr))">';
+  for(i=0;i<N;i++){
+    var n=room.names[i],cn=n&&canon(n);
+    var bidStatus="",pending=false;
+    if(ph==="bid"&&room.bids){
+      pending=room.bids[i]===null;
+      bidStatus=pending?"deciding\u2026":"ready \u2713";
+    }
+    h+='<div class="seat'+((room.turn===i||(ph==="bid"&&n&&pending))?" on":"")+'"><b>'+(n?esc(n):"Empty seat")+"</b>"+'<span class="tm" data-s="'+i+'"></span>'+(cn&&T[cn]&&room.rated!==false?" \u00b7 "+Math.round(T[cn].r):"")+"<br>"+
+      (room.landlord===i&&(ph==="play"||ph==="done")?'<span class="tag l">Landlord</span> ':"")+(ph==="play"||ph==="done"?room.counts[i]+" cards":"")+bidStatus+"</div>";
+  }
+  h+="</div>";
+
+  if(room.rated!==false&&(ph==="bid"||ph==="play"))h+='<p class="hint">Rated: 30 seconds per turn. If time runs out, the lowest card is played when you lead, otherwise you pass.</p>';
+  /* who is watching (no leaderboard name needed) */
+  var now=Date.now(),seen={},wl=watchers.filter(function(x){
+    if(room.seats.indexOf(x.uid)>=0||now-x.t>PRESENCE_MS||seen[x.uid])return false;
+    seen[x.uid]=1;return true;
+  });
+  if(wl.length)h+='<p class="hint">Watching ('+wl.length+'): '+wl.map(function(x){return esc(x.name);}).join(", ")+"</p>";
+
+  var full=room.seats.indexOf("")<0,mine=s===room.turn,nm=function(k){return esc(room.names[k]);};
+  if(ph==="lobby"||ph==="done"){
+    if(room.note&&ph==="lobby")h+='<p class="hint"><b>'+esc(room.note)+"</b></p>";
+    if(ph==="done"){
+      var wn=esc(room.winnerName||room.names[room.winner]||"Someone");
+      h+="<p><b>"+wn+" wins \u2014 "+(room.winner===room.landlord?"the landlord wins.":"the peasants win.")+"</b>"+(room.rated===false?" (casual, not rated)":"")+"</p>";
+      h+='<p class="hint">This table closes 5 minutes after the game ends unless you play again.</p><p><button data-act="review">Review this game</button></p>';
+    }
+    var open=ph==="lobby"||ph==="done";
+    h+=room.host===uid()?(full?'<button class="primary" data-act="start">'+(ph==="done"?"Play again":"Deal")+"</button>":"<p>Waiting for "+(N-room.seats.filter(Boolean).length)+" more player(s)\u2026</p>"):(s<0?((full||!open)?"<p>You\u2019re watching this table.</p>":'<p>You\u2019re watching. <button data-act="sit">Take a seat</button></p>'):"<p>Waiting for the host to deal\u2026</p>");
+  }else if(ph==="bid"||ph==="resolve"){
+    if(room.note)h+='<p class="hint"><b>'+esc(room.note)+"</b></p>";
+    if(ph==="bid"&&s>=0&&room.bids&&room.bids[s]===null){
+      h+='<p>Do you want to be the Landlord?</p><div class="actions"><button class="primary" data-act="bid" data-v="true">Yes</button><button data-act="bid" data-v="false">No</button></div>';
+    }else if(s>=0&&room.bids&&room.bids[s]!==null){
+      h+="<p>You said "+(room.bids[s]?"yes":"no")+". Waiting for everyone else to choose\u2026</p>";
+    }else{
+      h+="<p>Waiting for the players to choose whether to be landlord\u2026</p>";
+    }
+  }else if(ph==="play"){
+    if(room.bids){
+      var ys=[];room.bids.forEach(function(b,k){if(b===true)ys.push(room.names[k]);});
+      if(ys.length>1)h+='<p class="hint">'+ys.map(esc).join(", ")+" all said yes, so the landlord was picked at random.</p>";
+    }
+    h+="<p>Landlord\u2019s extra cards: "+room.kitty.map(function(c){return cardH(c);}).join("")+"</p>";
+
+    /* The last combo stays on screen until someone plays a new one, even after everyone passes. */
+    var sh=room.shown;
+    if(sh){
+      h+="<p>Last played by <b>"+nm(sh.seat)+"</b> \u2014 "+esc(sh.label)+(room.last?"":" <span class=\"hint\">(everyone passed, "+nm(room.turn)+" leads)</span>")+'</p><div class="hand">'+sh.cards.slice().sort(function(a,b){return cv(a)-cv(b)||a-b;}).map(function(c){return cardH(c);}).join("")+"</div>";
+    }else{
+      h+="<p>Nothing played yet. "+nm(room.turn)+" leads.</p>";
+    }
+
+    if(mine){
+      h+='<p><b>Your turn</b></p><div class="actions">';
+      h+='<button class="primary" data-act="play">Play selected</button>';
+      h+='<button data-act="lowest">Lowest play</button>';
+      if(room.last&&room.last.seat!==s)h+='<button data-act="pass">Pass</button>';
+      h+='</div>';
+    }else{
+      h+="<p>Waiting for "+nm(room.turn)+"\u2026</p>";
+    }
+  }
+
+  // Spectators see every hand
+  if(s<0&&ph!=="lobby"){
+    h+='<p class="hint"><b>Spectating: all hands</b></p>';
+    for(i=0;i<N;i++){
+      var sCards=specMap[room.seats[i]]||[];
+      h+='<p><b>'+(room.names[i]?esc(room.names[i]):"Seat "+(i+1))+"\u2019s hand ("+sCards.length+"):</b></p>";
+      h+='<div class="hand">'+sortedH(sCards,false)+"</div>";
+    }
+  }
+
+  if(s>=0&&hand.length)h+='<p class="hint">Your hand</p><div class="hand">'+sortedH(hand,true)+"</div>";
+
+  $("otable").innerHTML=h;
+  updateTimers();
+}
+
+$("online").onclick=function(e){
+  var t=e.target.closest("[data-id],[data-act]");if(!t||!db)return;
+  if(t.dataset.id!==undefined){var id=+t.dataset.id;sel[id]=!sel[id];renderOnline();return;}
+  var a=t.dataset.act;
+  if(a==="create")createRoom();
+  else if(a==="pjoin")joinRoom(t.dataset.code);else if(a==="pwatch")watchRoom(t.dataset.code);
+  else if(a==="leave")leaveRoom();else if(a==="review")openReplay("online_"+code+"_"+room.gameNo);
+  else if(a==="share")shareLink();else if(a==="sit")joinRoom(code);else if(a==="start")deal().catch(function(e){omsg(e.message);});
+  else if(a==="bid")bid(t.dataset.v==="true");else if(a==="play")play();else if(a==="lowest")selectLowestPlay();else if(a==="pass")pass();
+};
+
+function shareLink(){
+  var u=location.href.split("#")[0]+"#"+code;
+  try{navigator.clipboard.writeText(u).then(function(){omsg("Link copied. Anyone with it can watch this table.");},function(){omsg(u);});}catch(e){omsg(u);}
+}
+
+$("ochatForm").onsubmit=function(e){
+  e.preventDefault();
+  var t=$("otext").value.trim();if(!t||!room||!db)return;
+  var s=seat(),nm=s>=0?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");
+  addDoc(collection(db,"rooms",code,"chat"),{uid:uid(),name:nm,text:t.slice(0,200),t:serverTimestamp()}).catch(function(er){omsg(er.message);});
+  $("otext").value="";
+};
+var pendingCode=(location.hash.match(/^#([A-Za-z]{4})$/)||[])[1];
+pendingCode=pendingCode&&pendingCode.toUpperCase();
+window.onhashchange=function(){
+  var m=location.hash.match(/^#([A-Za-z]{4})$/);
+  if(m&&uid()&&m[1].toUpperCase()!==code)watch(m[1].toUpperCase());
+};
+try{$("oname").value=localStorage.getItem("ll-name")||"";}catch(e){}
+
+$("lockForm").onsubmit=function(e){
+  e.preventDefault();
+  if(!auth)return;
+  signInWithEmailAndPassword(auth,ADMIN_EMAIL,$("pass").value).then(function(){
+    $("pass").value="";
+  }).catch(function(){setStatus("That passcode didn\u2019t work.",true);});
+};
+$("lockBtn").onclick=function(){if(auth)signOut(auth);};
+
+if(configured){
+  var app=initializeApp(firebaseConfig);
+  db=getFirestore(app);
+  auth=getAuth(app);
+  onAuthStateChanged(auth,function(u){
+    var ad=!!u&&!u.isAnonymous;
+    S.admin=ad;
+    document.body.classList.toggle("unlocked",ad);
+    refresh();
+    if(u&&pendingCode&&!code){var pc=pendingCode;pendingCode=null;watch(pc);}
+    if(u&&!sweepTimer){sweep();sweepTimer=setInterval(sweep,60000);}
+    if(u)startLobby();
+    if(u)startReplays();
+    if(!u)signInAnonymously(auth).catch(function(){setStatus("Turn on Anonymous sign-in in Firebase to play online.",true);});
+  });
+  setStatus("Connecting\u2026");
+  onSnapshot(query(collection(db,"players"),orderBy("t")),function(snap){
+    S.players=[];S.ids={};
+    snap.forEach(function(d){var n=d.data().name;S.players.push(n);S.ids[n]=d.id;});
+    refresh();setStatus("Live: everyone sees the same leaderboard.");
+  },function(e){setStatus("Couldn\u2019t load players: "+e.message,true);});
+  onSnapshot(query(collection(db,"games"),orderBy("t")),function(snap){
+    S.games=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{id:d.id,l:x.l,a:x.a,b:x.b,c:x.c||"",w:x.w,t:x.t&&x.t.toMillis?x.t.toMillis():null};});
+    refresh();
+  },function(e){setStatus("Couldn\u2019t load games: "+e.message,true);});
+}else{
+  setStatus("The database isn\u2019t connected yet. Follow the setup steps, then paste your Firebase details at the top of the script in this file.",true);
+}
+refresh();
+</script>
+</body>
+</html>
