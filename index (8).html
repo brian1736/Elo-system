@@ -129,7 +129,6 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
         <label for="selL">Landlord</label><select id="selL"></select>
         <label for="selA">Peasant</label><select id="selA"></select>
         <label for="selB">Peasant</label><select id="selB"></select>
-        <label for="selC">Peasant (4-player games only)</label><select id="selC"></select>
         <label>Winner</label>
         <div class="seg">
           <input type="radio" name="w" id="wl" value="1" checked><label class="l" for="wl">Landlord won</label>
@@ -268,12 +267,10 @@ function replay(){
 }
 
 function fillSelects(){
-  ["selL","selA","selB","selC"].forEach(function(id,i){
+  ["selL","selA","selB"].forEach(function(id,i){
     var s=$(id),cur=s.value;s.innerHTML="";
-    if(id==="selC"){var o0=el("option","None (3 players)");o0.value="";s.appendChild(o0);}
     S.players.forEach(function(n){var o=el("option",n);o.value=n;s.appendChild(o);});
-    if(id==="selC")s.value=(cur&&S.players.indexOf(cur)>=0)?cur:"";
-    else if(cur&&S.players.indexOf(cur)>=0)s.value=cur;else if(S.players[i])s.value=S.players[i];
+    if(cur&&S.players.indexOf(cur)>=0)s.value=cur;else if(S.players[i])s.value=S.players[i];
   });
 }
 function renderPreview(){
@@ -281,11 +278,10 @@ function renderPreview(){
   if(!db){btn.disabled=true;p.textContent="Connect the database to record games.";return;}
   if(LOCK_GAMES&&!S.admin){btn.disabled=true;p.textContent="Enter the passcode to record games.";return;}
   if(S.players.length<3){btn.disabled=true;p.textContent="Add at least three players to record a game.";return;}
-  var l=$("selL").value,a=$("selA").value,b=$("selB").value,c=$("selC").value;
-  var names=[l,a,b].concat(c?[c]:[]),uniq={};names.forEach(function(n){uniq[n]=1;});
-  if(Object.keys(uniq).length<names.length){btn.disabled=true;p.textContent="Pick different players.";return;}
+  var l=$("selL").value,a=$("selA").value,b=$("selB").value;
+  if(l===a||l===b||a===b){btn.disabled=true;p.textContent="Pick different players.";return;}
   btn.disabled=false;
-  var g={l:l,a:a,b:b,c:c,w:$("wl").checked},x=calc(T,g,S.cfg);
+  var g={l:l,a:a,b:b,w:$("wl").checked},x=calc(T,g,S.cfg);
   p.appendChild(el("div",l+" is expected to win "+pct(x.e)+" of the time."));
   var bar=el("div",null,"bar"),i=el("i");i.style.width=(x.e*100)+"%";bar.appendChild(i);p.appendChild(bar);
   p.appendChild(el("div","If recorded: "+l+" "+sign(x.dl)+", "+peas(g).map(function(n,k){return n+" "+sign(x.dp[k]);}).join(", ")));
@@ -295,12 +291,12 @@ function renderBoard(){
   if(!S.players.length){b.appendChild(el("p","No players yet. Add the names of everyone who plays.","empty"));return;}
   var rows=S.players.slice().sort(function(x,y){return T[y].r-T[x].r;});
   var t=el("table"),h=el("tr");
-  ["#","Player","Rating","Games","As landlord","As peasant",""].forEach(function(x,i){var th=el("th",x);if(i==2||i==3)th.className="num";h.appendChild(th);});
+  ["#","Player","Rating","Games","Win rate","As landlord","As peasant",""].forEach(function(x,i){var th=el("th",x);if(i>=2&&i<=4)th.className="num";h.appendChild(th);});
   t.appendChild(h);
   rows.forEach(function(n,i){
     var p=T[n],r=el("tr");
     r.appendChild(el("td",i+1));r.appendChild(el("td",n));
-    r.appendChild(el("td",Math.round(p.r),"num rating"));r.appendChild(el("td",p.g,"num"));
+    r.appendChild(el("td",Math.round(p.r),"num rating"));r.appendChild(el("td",p.g,"num"));r.appendChild(el("td",p.g?pct((p.lw+p.pw)/p.g):"\u2013","num"));
     r.appendChild(el("td",p.lg?p.lw+"\u2013"+(p.lg-p.lw)+" ("+pct(p.lw/p.lg)+")":"\u2013"));
     r.appendChild(el("td",p.pg?p.pw+"\u2013"+(p.pg-p.pw)+" ("+pct(p.pw/p.pg)+")":"\u2013"));
     var td=el("td");
@@ -338,14 +334,13 @@ $("addForm").onsubmit=function(e){
 $("record").onclick=function(){
   if(!db)return;
   var g={l:$("selL").value,a:$("selA").value,b:$("selB").value,w:$("wl").checked,t:serverTimestamp()};
-  if($("selC").value)g.c=$("selC").value;
   addDoc(collection(db,"games"),g).catch(fail);
 };
 $("undo").onclick=function(){
   var g=S.games[S.games.length-1];
   if(g&&db)deleteDoc(doc(db,"games",g.id)).catch(fail);
 };
-["selL","selA","selB","selC","wl","wp"].forEach(function(id){$(id).addEventListener("change",renderPreview);});
+["selL","selA","selB","wl","wp"].forEach(function(id){$(id).addEventListener("change",renderPreview);});
 
 $("impBtn").onclick=async function(){
   var msg=$("impMsg");
@@ -398,7 +393,7 @@ $("impBtn").onclick=async function(){
 var CL=["3","4","5","6","7","8","9","10","J","Q","K","A","2"],SU=["\u2660","\u2665","\u2666","\u2663"];
 var room=null,code=null,hand=[],sel={},unsubs=[],acted="";
 var specUnsub=null,specMap={};           // spectators: uid -> cards, read from the public "view" collection
-var watchers=[],presTimer=null;           // who has the table open without a seat
+var watchers=[],presTimer=null,seen={};           // who has the table open without a seat
 /* Card ids 0-53 are one deck, 54-107 the second deck (4-player tables). Values 0-12 = 3..2, 13 = small joker, 14 = big joker. */
 function cb(i){return i%54;}
 function cv(i){var b=cb(i);return b>51?b-39:b>>2;}
@@ -556,7 +551,7 @@ function lowestPlay(cards,lastPlay){
 }
 
 function watch(c){
-  unsubs.forEach(function(u){u();});unsubs=[];code=c;hand=[];sel={};specUnsub=null;specMap={};watchers=[];
+  unsubs.forEach(function(u){u();});unsubs=[];code=c;hand=[];sel={};specUnsub=null;specMap={};watchers=[];seen={};
   if(presTimer)clearInterval(presTimer);
   $("olog").innerHTML="";
   if(location.hash.slice(1)!==c)history.replaceState(null,"","#"+c);
@@ -577,16 +572,26 @@ function watch(c){
 
   /* who has this table open */
   unsubs.push(onSnapshot(collection(db,"rooms",c,"presence"),function(snap){
-    watchers=snap.docs.map(function(d){var x=d.data({serverTimestamps:"estimate"});return{uid:d.id,name:x.name||"Guest",t:x.t&&x.t.toMillis?x.t.toMillis():Date.now()};});
-    renderOnline();
+    watchers=snap.docs.map(function(d){
+      var x=d.data({serverTimestamps:"estimate"}),tm=x.t&&x.t.toMillis?x.t.toMillis():0,r=seen[d.id];
+      if(!r||r.t!==tm)r=seen[d.id]={t:tm,at:Date.now()};   // a new heartbeat: remember when we saw it
+      return{uid:d.id,name:x.name||"Guest",t:tm,at:r.at};
+    });
+    refreshWatchers();
   },function(){}));
   watchStart=Date.now();
-  presTimer=setInterval(function(){beat();renderOnline();},15000);
+  presTimer=setInterval(function(){beat();refreshWatchers();},15000);
   setTimeout(beat,1500);
 }
 
 /* Non-seated viewers announce themselves every 20 seconds so others can see who is watching. */
 function myLabel(){var s=seat();return(room&&s>=0)?room.names[s]:($("oname").value.trim().slice(0,24)||"Guest");}
+var wSig="";
+function watchSig(){
+  var now=Date.now();
+  return watchers.filter(function(x){return room&&room.seats.indexOf(x.uid)<0&&now-x.at<=PRESENCE_MS;}).map(function(x){return x.uid+":"+x.name;}).sort().join("|");
+}
+function refreshWatchers(){var sg=watchSig();if(sg!==wSig){wSig=sg;renderOnline();}}
 function beat(){
   if(!db||!code||!uid()||!room)return;
   setDoc(pref(uid()),{name:myLabel(),t:serverTimestamp()}).catch(function(){});
@@ -676,10 +681,11 @@ function bid(v){
 
 function play(){
   var N=NP(),s=seat(),ids=hand.filter(function(c){return sel[c];}),cl=classify(ids,R());
-  if(!cl){omsg("That isn\u2019t a valid combination.");return;}
+  if(!ids.length){omsg("Tap the cards you want to play first.");return;}
+  if(!cl){omsg(ids.length+" card"+(ids.length===1?"":"s")+" selected: that isn\u2019t a valid combination.");return;}
   if(!allowed(cl,R())){omsg("That combination isn\u2019t allowed at this table.");return;}
   var last=room.last&&room.last.seat!==s?room.last:null;
-  if(!beats(last,cl)){omsg("That doesn\u2019t beat the last play.");return;}
+  if(!beats(last,cl)){omsg("That "+comboName(cl).toLowerCase()+" doesn\u2019t beat the last play ("+(room.shown?room.shown.label:"previous play")+"). Play the same kind of combination with higher cards, a bomb, or the rocket.");return;}
 
   var left=hand.filter(function(c){return !sel[c];}),counts=room.counts.slice();counts[s]=left.length;
 
@@ -692,7 +698,12 @@ function play(){
   var b=writeBatch(db);
   b.set(href(uid()),{cards:left});
   b.set(vref(uid()),{cards:left});
-  b.commit().then(function(){return updateDoc(rref(),up);}).catch(function(e){omsg(e.message);});
+  b.update(rref(),up);
+  b.commit().catch(function(e){
+    ids.forEach(function(c){sel[c]=1;});
+    omsg("Couldn\u2019t play that: "+e.message);
+    renderOnline();
+  });
 }
 
 function selectLowestPlay(){
@@ -745,13 +756,20 @@ async function joinRoom(c){
 }
 /* Resets a game in progress back to the waiting room. No result is recorded, so nothing changes in
    anyone's rating. The players listed in "gone" lose their seat; everyone else keeps theirs. */
-async function resetGame(c,why,gone){
+async function resetGame(c,why,gone,obs){
   var rr=doc(db,"rooms",c);
   try{
     await runTransaction(db,async function(tx){
       var d=await tx.get(rr);if(!d.exists())return;
       var r=d.data();
       if(["bid","resolve","play"].indexOf(r.phase)<0)return;
+      if(obs){
+        for(var k=0;k<gone.length;k++){
+          var pd=await tx.get(doc(db,"rooms",c,"presence",gone[k]));
+          var pt=pd.exists()&&pd.data().t&&pd.data().t.toMillis?pd.data().t.toMillis():0;
+          if(obs[gone[k]]&&pt&&pt!==obs[gone[k]])return;   // they are still alive, so do nothing
+        }
+      }
       var N=r.size||3,seats=r.seats.slice(),names=r.names.slice();
       seats.forEach(function(u,i){if(gone.indexOf(u)>=0){seats[i]="";names[i]="";}});
       var rest=seats.filter(Boolean);
@@ -761,19 +779,27 @@ async function resetGame(c,why,gone){
     });
   }catch(e){}
 }
-/* A seated player whose browser has stopped sending heartbeats has left. */
+/* A seated player whose browser has stopped sending heartbeats for a long time has left.
+   Only one browser (the host's, or the next player if the host is the one missing) is allowed to decide this,
+   it never runs while its own tab is hidden, and the game is only reset if the player still looks gone
+   when the reset is actually written. */
+var ABSENT_MS=90000;
 function checkAbsent(){
-  if(!room||!code||seat()<0||resetting)return;
+  if(!room||!code||seat()<0||resetting||document.hidden)return;
   if(["bid","resolve","play"].indexOf(room.phase)<0)return;
-  if(Date.now()-watchStart<30000)return;
-  var now=Date.now(),pm={},gone=[],who=[];
-  watchers.forEach(function(x){pm[x.uid]=x.t;});
+  var now=Date.now(),pm={},gone=[],who=[],obs={};
+  watchers.forEach(function(x){pm[x.uid]=x;});
   room.seats.forEach(function(u,i){
-    if(u&&u!==uid()&&(!pm[u]||now-pm[u]>45000)){gone.push(u);who.push(room.names[i]);}
+    if(!u||u===uid())return;
+    var age=pm[u]?now-pm[u].at:now-watchStart;
+    if(age>ABSENT_MS){gone.push(u);who.push(room.names[i]);obs[u]=pm[u]?pm[u].t:0;}
   });
   if(!gone.length)return;
+  var alive=room.seats.filter(function(u){return u&&gone.indexOf(u)<0;});
+  var judge=alive.indexOf(room.host)>=0?room.host:alive[0];
+  if(judge!==uid())return;
   resetting=true;
-  resetGame(code,who.join(", ")+(who.length>1?" left":" left")+", so the game was reset. No ratings changed.",gone).then(function(){resetting=false;});
+  resetGame(code,who.join(", ")+" disconnected, so the game was reset. No ratings changed.",gone,obs).then(function(){setTimeout(function(){resetting=false;},10000);});
 }
 
 /* Leaving a table that isn't mid-game frees the seat. Leaving mid-game resets the game for everyone
@@ -880,7 +906,15 @@ function autoAct(){
   sel={};pick.forEach(function(c){sel[c]=1;});
   omsg("Time ran out, so your lowest card was played.");play();
 }
+var lastTickAt=Date.now();
 function tick(){
+  var now=Date.now();
+  if(now-lastTickAt>5000){
+    Object.keys(seen).forEach(function(k){seen[k].at=now;});
+    watchers.forEach(function(x){x.at=now;});
+    watchStart=now;
+  }
+  lastTickAt=now;
   var left=updateTimers();
   if(timed()&&left===0&&autoKey!==turnKey){autoKey=turnKey;autoAct();}
   checkAbsent();
@@ -1040,9 +1074,9 @@ function renderOnline(){
 
   if(room.rated!==false&&(ph==="bid"||ph==="play"))h+='<p class="hint">Rated: 30 seconds per turn. If time runs out, the lowest card is played when you lead, otherwise you pass.</p>';
   /* who is watching (no leaderboard name needed) */
-  var now=Date.now(),seen={},wl=watchers.filter(function(x){
-    if(room.seats.indexOf(x.uid)>=0||now-x.t>PRESENCE_MS||seen[x.uid])return false;
-    seen[x.uid]=1;return true;
+  var now=Date.now(),dup={},wl=watchers.filter(function(x){
+    if(room.seats.indexOf(x.uid)>=0||now-x.at>PRESENCE_MS||dup[x.uid])return false;
+    dup[x.uid]=1;return true;
   });
   if(wl.length)h+='<p class="hint">Watching ('+wl.length+'): '+wl.map(function(x){return esc(x.name);}).join(", ")+"</p>";
 
