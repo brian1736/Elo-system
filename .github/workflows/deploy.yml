@@ -1,0 +1,50 @@
+# Publishes the site to GitHub Pages and inserts the Firebase API key from a GitHub secret,
+# so the key never appears in the repository's files or history.
+name: Deploy site
+
+on:
+  push:
+    branches: [main]      # change to master if your default branch is called master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Insert the Firebase API key
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+        run: |
+          if [ -z "$FIREBASE_API_KEY" ]; then
+            echo "The FIREBASE_API_KEY secret is missing. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          mkdir site
+          sed "s|__FIREBASE_API_KEY__|${FIREBASE_API_KEY}|g" index.html > site/index.html
+          if grep -q "__FIREBASE_API_KEY__" site/index.html; then
+            echo "The placeholder was not replaced."
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
