@@ -136,17 +136,18 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
         </div>
         <div class="preview" id="preview" aria-live="polite"></div>
         <button class="primary" id="record">Record game</button>
+        <p class="hint" id="recMsg" role="status"></p>
       </div>
     </section>
 
     <section aria-labelledby="h-board">
       <h2 id="h-board">Leaderboard</h2>
       <form class="row" id="lockForm" style="max-width:420px;margin-bottom:10px">
-        <input type="password" id="pass" placeholder="Passcode to remove players or undo games" autocomplete="current-password" aria-label="Passcode">
+        <input type="password" id="pass" placeholder="Manager passcode (add players, record games, undo)" autocomplete="current-password" aria-label="Passcode">
         <button type="submit">Unlock</button>
       </form>
       <p class="hint admin" id="unlockedNote">Manage mode is on. <button class="link" id="lockBtn" type="button">Lock</button></p>
-      <form class="row" id="addForm">
+      <form class="row admin" id="addForm">
         <input type="text" id="newName" placeholder="Player name" maxlength="24" aria-label="New player name">
         <button type="submit">Add player</button>
       </form>
@@ -190,6 +191,15 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
   </section>
 
   <details class="full admin">
+    <summary>Remove games by time</summary>
+    <p class="hint">Use this to clear out spam or mistakes. Pick the time window the unwanted games were recorded in (the dates in Recent games help), preview what would be removed, then delete. Games outside the window are kept. Deleting can\u2019t be undone.</p>
+    <label for="dfrom">From</label><input type="datetime-local" id="dfrom">
+    <label for="dto">To</label><input type="datetime-local" id="dto">
+    <div class="row" style="margin-top:10px"><button id="dprev" type="button">Preview</button><button id="ddel" type="button" disabled>Delete these games</button></div>
+    <p class="hint" id="dmsg" role="status"></p>
+  </details>
+
+  <details class="full admin">
     <summary>Import past games</summary>
     <p class="hint">One game per line, oldest first: landlord, peasant, peasant, winner. Write L if the landlord won and P if the peasants won. New names are added as players automatically.</p>
     <textarea id="imp" aria-label="Past games" placeholder="Ava, Ben, Cleo, L&#10;Ben, Ava, Dan, P"></textarea>
@@ -200,6 +210,7 @@ button.card.sel{transform:translateY(-8px);border-color:var(--accent);box-shadow
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app-check.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, arrayUnion, query, where, orderBy, limit, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -214,8 +225,9 @@ const firebaseConfig = {
 };
 /* ================================================================ */
 
-const ADMIN_EMAIL="BrianDong22@gmail.com";
-const LOCK_GAMES=true;
+const ADMIN_EMAIL="BrianDongg22@gmail.com";
+const LOCK_GAMES=true;            // physical games need the passcode (Unlock) to be recorded
+const APPCHECK_SITE_KEY="";       // optional: paste a reCAPTCHA v3 site key to turn on Firebase App Check
 const DEL_MS=5*60*1000;          // a finished or empty table is deleted this long after
 const MAX_AGE_MS=12*3600*1000;   // safety net: any table older than this is deleted
 const PRESENCE_MS=75*1000;       // a watcher counts as present for this long after their last heartbeat
@@ -288,7 +300,7 @@ function renderPreview(){
 }
 function renderBoard(){
   var b=$("board");b.innerHTML="";
-  if(!S.players.length){b.appendChild(el("p","No players yet. Add the names of everyone who plays.","empty"));return;}
+  if(!S.players.length){b.appendChild(el("p",S.admin?"No players yet. Add the names of everyone who plays.":"No players yet. A manager needs to add them.","empty"));return;}
   var rows=S.players.slice().sort(function(x,y){return T[y].r-T[x].r;});
   var t=el("table"),h=el("tr");
   ["#","Player","Rating","Games","Win rate","As landlord","As peasant",""].forEach(function(x,i){var th=el("th",x);if(i>=2&&i<=4)th.className="num";h.appendChild(th);});
@@ -325,16 +337,21 @@ function fail(e){setStatus("Couldn\u2019t save: "+e.message,true);}
 $("addForm").onsubmit=function(e){
   e.preventDefault();
   var n=$("newName").value.trim();
-  if(!n||!db)return;
+  if(!n||!db||!S.admin)return;
   var id=n.toLowerCase().replace(/[\/\s]/g,"_");
   if(S.players.some(function(p){return p.toLowerCase()===n.toLowerCase();})){$("newName").value="";return;}
   setDoc(doc(db,"players",id),{name:n,t:serverTimestamp()}).catch(fail);
   $("newName").value="";
 };
 $("record").onclick=function(){
-  if(!db)return;
-  var g={l:$("selL").value,a:$("selA").value,b:$("selB").value,w:$("wl").checked,t:serverTimestamp()};
-  addDoc(collection(db,"games"),g).catch(fail);
+  if(!db||(LOCK_GAMES&&!S.admin))return;
+  var g={l:$("selL").value,a:$("selA").value,b:$("selB").value,w:$("wl").checked,t:serverTimestamp()},m=$("recMsg");
+  m.style.color="var(--muted)";m.textContent="Saving\u2026";$("record").disabled=true;
+  addDoc(collection(db,"games"),g).then(function(){
+    m.textContent="Game recorded.";
+  }).catch(function(e){
+    m.style.color="var(--land)";m.textContent="Couldn\u2019t record the game: "+e.message;
+  }).then(function(){renderPreview();});
 };
 $("undo").onclick=function(){
   var g=S.games[S.games.length-1];
@@ -388,6 +405,38 @@ $("impBtn").onclick=async function(){
   }catch(e){msg.textContent="Couldn\u2019t import: "+e.message;}
   $("impBtn").disabled=false;
 };
+
+/* ---------- Remove games by time window (admin) ---------- */
+function dRange(){
+  var f=$("dfrom").value,t=$("dto").value;
+  if(!f||!t)return null;
+  var a=new Date(f).getTime(),b=new Date(t).getTime();
+  if(isNaN(a)||isNaN(b)||a>b)return null;
+  return S.games.filter(function(g){return g.t&&g.t>=a&&g.t<=b;});
+}
+$("dprev").onclick=function(){
+  var m=$("dmsg"),list=dRange();$("ddel").disabled=true;
+  if(!list){m.textContent="Pick a valid From and To time (From must be before To).";return;}
+  if(!list.length){m.textContent="No games in that window.";return;}
+  var ts=list.map(function(g){return g.t;});
+  m.textContent=list.length+" of "+S.games.length+" games would be removed, from "+stamp(Math.min.apply(null,ts))+" to "+stamp(Math.max.apply(null,ts))+".";
+  $("ddel").disabled=false;
+};
+$("ddel").onclick=async function(){
+  var list=dRange(),m=$("dmsg");
+  if(!list||!list.length||!db)return;
+  if(!confirm("Permanently delete "+list.length+" games? This can\u2019t be undone."))return;
+  $("ddel").disabled=true;m.textContent="Deleting\u2026";
+  try{
+    for(var i=0;i<list.length;i+=400){
+      var b=writeBatch(db);
+      list.slice(i,i+400).forEach(function(g){b.delete(doc(db,"games",g.id));});
+      await b.commit();
+    }
+    m.textContent="Deleted "+list.length+" games.";
+  }catch(e){m.textContent="Couldn\u2019t delete: "+e.message;$("ddel").disabled=false;}
+};
+['dfrom','dto'].forEach(function(id){$(id).addEventListener("input",function(){$("ddel").disabled=true;});});
 
 /* ---------- Online play ---------- */
 var CL=["3","4","5","6","7","8","9","10","J","Q","K","A","2"],SU=["\u2660","\u2665","\u2666","\u2663"];
@@ -662,7 +711,8 @@ function record(){
   if(nm.some(function(x){return !x;})){omsg("Not added to the leaderboard: every name must match a leaderboard player.");return;}
   var L=room.landlord,g={l:nm[L],a:nm[(L+1)%N],b:nm[(L+2)%N],w:room.winner===L,t:serverTimestamp()};
   if(N===4)g.c=nm[(L+3)%N];
-  setDoc(doc(db,"games","online_"+code+"_"+room.gameNo),g).catch(function(){});
+  var gref=doc(db,"games","online_"+code+"_"+room.gameNo);
+  getDoc(gref).then(function(s){if(!s.exists())return setDoc(gref,g);}).catch(function(e){omsg("Couldn\u2019t add this game to the leaderboard: "+e.message);});
 }
 
 /* Everyone answers yes or no at the same time; answers stay hidden until all are in. */
@@ -1183,10 +1233,11 @@ $("lockBtn").onclick=function(){if(auth)signOut(auth);};
 
 if(configured){
   var app=initializeApp(firebaseConfig);
+  if(APPCHECK_SITE_KEY)initializeAppCheck(app,{provider:new ReCaptchaV3Provider(APPCHECK_SITE_KEY),isTokenAutoRefreshEnabled:true});
   db=getFirestore(app);
   auth=getAuth(app);
   onAuthStateChanged(auth,function(u){
-    var ad=!!u&&!u.isAnonymous;
+    var ad=!!u&&!u.isAnonymous&&String(u.email||"").toLowerCase()===ADMIN_EMAIL.toLowerCase();   // only the real admin account, not just any email/password account
     S.admin=ad;
     document.body.classList.toggle("unlocked",ad);
     refresh();
