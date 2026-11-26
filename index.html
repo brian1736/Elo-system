@@ -214,9 +214,9 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, arrayUnion, query, where, orderBy, limit, limitToLast, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-/* ====== PASTE YOUR FIREBASE DETAILS HERE (see setup steps) ====== */
+/* ====== FIREBASE DETAILS. The API key is inserted at publish time from a GitHub secret. ====== */
 const firebaseConfig = {
-  apiKey: "AIzaSyB_Run2TYJi55vID0qQdZKfcDJZhXiDcj4",
+  apiKey: "__FIREBASE_API_KEY__",
   authDomain: "elo-system-b34ae.firebaseapp.com",
   projectId: "elo-system-b34ae",
   storageBucket: "elo-system-b34ae.firebasestorage.app",
@@ -234,7 +234,7 @@ const PRESENCE_MS=75*1000;       // a watcher counts as present for this long af
 
 /* offset4 is the landlord offset for 4-player games (1 landlord against 3 peasants) */
 const DEF={start:500,scale:400,offset:0,offset4:0,kNew:40,kMid:24,kEst:16,prov:20,est:100};
-const configured=!firebaseConfig.apiKey.startsWith("PASTE");
+const configured=!/^(PASTE|__)/.test(firebaseConfig.apiKey);   // placeholder = not connected (e.g. opened without the build step)
 let db=null,auth=null;
 const S={admin:false,players:[],ids:{},games:[],cfg:Object.assign({},DEF)};
 let T={};
