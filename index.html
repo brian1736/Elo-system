@@ -225,7 +225,7 @@ const firebaseConfig = {
 };
 /* ================================================================ */
 
-const ADMIN_EMAIL="BrianDongg22@gmail.com";
+const ADMIN_EMAIL="BrianDong22@gmail.com";
 const LOCK_GAMES=true;            // physical games need the passcode (Unlock) to be recorded
 const APPCHECK_SITE_KEY="";       // optional: paste a reCAPTCHA v3 site key to turn on Firebase App Check
 const DEL_MS=5*60*1000;          // a finished or empty table is deleted this long after
@@ -1245,7 +1245,10 @@ if(configured){
     if(u&&!sweepTimer){sweep();sweepTimer=setInterval(sweep,60000);}
     if(u)startLobby();
     if(u)startReplays();
-    if(!u)signInAnonymously(auth).catch(function(){setStatus("Turn on Anonymous sign-in in Firebase to play online.",true);});
+    if(!u)signInAnonymously(auth).catch(function(e){
+      var c=String((e&&e.code)||""),why=/operation-not-allowed|admin-restricted/.test(c)?"Anonymous sign-in is switched off in Firebase.":/api-key-not-valid|invalid-api-key/.test(c)?"The API key is wrong or was not inserted.":/referer|blocked|forbidden|unauthorized-domain/.test(c+String(e&&e.message))?"The API key restrictions are blocking this website or this API.":"See the code below.";
+      setStatus("Can\u2019t sign in to play online. "+why+" ("+(c||(e&&e.message)||"unknown error")+")",true);
+    });
   });
   setStatus("Connecting\u2026");
   onSnapshot(query(collection(db,"players"),orderBy("t")),function(snap){
