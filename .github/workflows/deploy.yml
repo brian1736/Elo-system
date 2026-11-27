@@ -1,5 +1,6 @@
 # Publishes the site to GitHub Pages and inserts the Firebase API key from a GitHub secret,
 # so the key never appears in the repository's files or history.
+# Two jobs (build, then deploy), as in GitHub's own Pages template.
 name: Deploy site
 
 on:
@@ -14,16 +15,15 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
 
       - name: Insert the Firebase API key
         env:
@@ -39,12 +39,18 @@ jobs:
             echo "The placeholder was not replaced."
             exit 1
           fi
-
-      - uses: actions/configure-pages@v5
+          ls -la site
 
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
